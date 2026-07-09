@@ -1,0 +1,1700 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>RiskVision AI | Predictive Project Intelligence</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  
+  <!-- Google Fonts & Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..900&amp;display=swap" rel="stylesheet"/>
+  
+  <!-- Custom Consolidated CSS Stylesheet -->
+  <link href="css/style.css" rel="stylesheet"/>
+
+  <!-- Tailwind Theme Customizations -->
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+              "outline-variant": "#414755",
+              "secondary-container": "#7000ff",
+              "surface": "#10131b",
+              "on-secondary-fixed-variant": "#5700c9",
+              "surface-container-high": "#272a32",
+              "inverse-primary": "#005bc1",
+              "on-primary-fixed": "#001a41",
+              "on-secondary-container": "#ddcdff",
+              "secondary": "#d1bcff",
+              "secondary-fixed-dim": "#d1bcff",
+              "surface-container-highest": "#31353d",
+              "on-background": "#e0e2ed",
+              "on-secondary-fixed": "#23005b",
+              "on-tertiary-fixed-variant": "#004f54",
+              "surface-container-lowest": "#0b0e16",
+              "surface-container": "#1c2028",
+              "tertiary-container": "#00a0aa",
+              "inverse-on-surface": "#2d3039",
+              "surface-variant": "#31353d",
+              "on-error-container": "#ffdad6",
+              "on-error": "#690005",
+              "primary": "#adc6ff",
+              "error": "#ffb4ab",
+              "primary-fixed": "#d8e2ff",
+              "tertiary-fixed": "#7df4ff",
+              "on-primary-container": "#00285c",
+              "on-surface-variant": "#c1c6d7",
+              "tertiary-fixed-dim": "#00dbe9",
+              "on-surface": "#e0e2ed",
+              "surface-tint": "#adc6ff",
+              "on-tertiary-container": "#002f33",
+              "tertiary": "#00dbe9"
+          },
+          "borderRadius": {
+              "DEFAULT": "0.25rem",
+              "lg": "0.5rem",
+              "xl": "0.75rem",
+              "full": "9999px"
+          },
+          "spacing": {
+              "gutter": "24px",
+              "container-max": "1440px",
+              "margin-mobile": "20px",
+              "margin-tablet": "32px",
+              "margin-desktop": "64px",
+              "unit": "8px"
+          },
+          "fontFamily": {
+              "display-lg": ["Geist"],
+              "body-lg": ["Inter"],
+              "headline-lg": ["Geist"],
+              "display-xl": ["Geist"],
+              "headline-lg-mobile": ["Geist"],
+              "body-md": ["Inter"],
+              "label-mono": ["JetBrains Mono"]
+          },
+          "fontSize": {
+              "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+              "body-lg": ["18px", {"lineHeight": "28px", "letterSpacing": "0em", "fontWeight": "400"}],
+              "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+              "display-xl": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.04em", "fontWeight": "700"}],
+              "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+              "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}],
+              "label-mono": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}]
+          }
+        },
+      },
+    }
+  </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md selection:bg-primary selection:text-on-primary">
+
+  <!-- Background WebGL Shader Canvas -->
+  <canvas id="global-shader-canvas" class="fixed inset-0 w-full h-full -z-20 opacity-55"></canvas>
+  <div class="aurora-bg"></div>
+
+  <!-- Common Floating Glass Navigation Bar -->
+  <nav class="fixed top-4 left-1/2 -translate-x-1/2 w-[92%] max-w-container-max rounded-full bg-surface/60 backdrop-blur-xl border border-white/10 shadow-[0_0_30px_rgba(173,198,255,0.15)] flex items-center justify-between px-8 py-3 z-50">
+    <a class="flex items-center gap-3 active:scale-95 transition-transform" href="#/">
+      <img alt="RiskVision Logo" class="h-8 w-8 object-contain" src="assets/logo.svg"/>
+      <span class="font-display-lg text-headline-lg-mobile md:text-headline-lg text-primary tracking-tight">RiskVision AI</span>
+    </a>
+    <div id="nav-links" class="hidden md:flex gap-8">
+      <a href="#/" class="text-primary font-bold border-b-2 border-primary pb-1 font-body-md text-body-md">Platform</a>
+      <a href="#/workflow" class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-body-md text-body-md nav-guest">Workflow</a>
+      <a href="#/simulation" class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-body-md text-body-md nav-guest">Simulation</a>
+      <a href="#/dashboard" class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-body-md text-body-md nav-auth hidden">Dashboard</a>
+      <a href="#/projects" class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-body-md text-body-md nav-auth hidden">Projects</a>
+      <a href="#/predictions" class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-body-md text-body-md nav-auth hidden">History</a>
+      <a href="#/training" class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-body-md text-body-md nav-auth hidden">Models</a>
+      <a href="#/admin" class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-body-md text-body-md nav-admin hidden">Admin</a>
+    </div>
+    <!-- Backend Status Indicator -->
+    <div id="backend-status-banner" class="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-high border border-white/10">
+      <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+      <span class="font-label-mono text-[10px] uppercase tracking-widest text-green-400">Checking backend...</span>
+    </div>
+    <div id="nav-actions" class="flex items-center gap-4">
+      <a id="btn-nav-login" class="bg-primary-container text-on-primary-container px-6 py-2 rounded-full font-bold active:scale-95 transition-transform shadow-[0_0_20px_rgba(75,142,255,0.2)] font-body-md text-[14px]" href="#/login">
+        Sign In
+      </a>
+      <div id="user-profile-menu" class="hidden relative flex items-center gap-3">
+        <!-- Notification Bell Icon -->
+        <a href="#/notifications" class="relative text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center p-2 rounded-full hover:bg-white/5">
+          <span class="material-symbols-outlined">notifications</span>
+          <span id="unread-notifications-count" class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full hidden"></span>
+        </a>
+        <!-- User Avatar / Dropdown Toggle -->
+        <a href="#/profile" class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/5">
+          <span class="material-symbols-outlined">account_circle</span>
+          <span id="nav-user-fullname" class="text-xs font-bold max-w-[100px] truncate">Profile</span>
+        </a>
+        <button id="btn-nav-logout" class="text-xs text-on-surface-variant hover:text-error transition-colors flex items-center p-2 rounded-full hover:bg-white/5" title="Sign Out">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content Wrapper -->
+  <main class="relative min-h-[80vh] w-full">
+
+    <!-- ================= PAGE: HOME (LANDING PAGE) ================= -->
+    <section id="page-home" class="page-section active">
+      <section class="min-h-screen relative flex items-center pt-32 pb-20 px-gutter">
+        <div class="max-w-container-max mx-auto grid grid-cols-1 lg:grid-cols-2 items-center gap-16 relative w-full">
+          <div class="space-y-8">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-card border-white/20 text-primary-fixed-dim text-label-mono uppercase tracking-widest">
+              <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+              Next-Gen Risk Assessment
+            </div>
+            <h1 class="font-display-xl text-display-xl leading-tight">
+              Predict Software <br/>
+              <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-tertiary">Project Failures</span> <br/>
+              Before They Happen
+            </h1>
+            <p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl">
+              RiskVision AI leverages multi-dimensional neural networks to identify hidden patterns in SDLC data, providing 94.2% accuracy in early failure detection.
+            </p>
+            <div class="flex flex-wrap gap-4 pt-4">
+              <a class="px-8 py-4 bg-primary text-on-primary rounded-xl font-bold hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] transition-all flex items-center justify-center" href="#/simulation">Launch Simulator</a>
+              <a class="px-8 py-4 glass-card rounded-xl font-bold hover:bg-white/10 transition-all flex items-center justify-center" href="#/workflow">Explore Workflow</a>
+            </div>
+          </div>
+          <div class="relative flex justify-center items-center h-[500px]">
+            <div class="absolute inset-0 bg-primary/10 blur-[100px] rounded-full"></div>
+            <!-- Dynamic Three.js Container -->
+            <div id="threejs-container-home" class="w-full h-full animate-float"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features Grid -->
+      <section class="py-24 px-gutter" id="platform">
+        <div class="max-w-container-max mx-auto">
+          <div class="text-center mb-20">
+            <h2 class="font-display-lg text-display-lg mb-6">The Future of Governance</h2>
+            <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">
+              Traditional risk management is reactive. RiskVision is surgical. We quantify uncertainty into actionable decision matrices.
+            </p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="glass-card p-8 rounded-3xl group hover:border-primary/50 transition-all duration-500">
+              <div class="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+                <span class="material-symbols-outlined text-primary text-3xl">psychology</span>
+              </div>
+              <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-4">Neural Diagnostics</h3>
+              <p class="text-on-surface-variant">Our engine scans commit velocity, sentiment, and code complexity to find the 'silent killers' of enterprise software.</p>
+            </div>
+            <div class="glass-card p-8 rounded-3xl group hover:border-tertiary/50 transition-all duration-500 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-32 h-32 bg-tertiary/10 blur-3xl -z-10"></div>
+              <div class="w-14 h-14 rounded-2xl bg-tertiary/10 flex items-center justify-center mb-6">
+                <span class="material-symbols-outlined text-tertiary text-3xl">precision_manufacturing</span>
+              </div>
+              <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-4">Autonomous Mitigation</h3>
+              <p class="text-on-surface-variant">Automatically suggest sprint pivots and resource re-allocation before bottlenecks solidify into delays.</p>
+            </div>
+            <div class="glass-card p-8 rounded-3xl group hover:border-secondary/50 transition-all duration-500">
+              <div class="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-6">
+                <span class="material-symbols-outlined text-secondary text-3xl">query_stats</span>
+              </div>
+              <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-4">Predictive Health</h3>
+              <p class="text-on-surface-variant">Move beyond 'Green/Yellow/Red' statuses. See exactly which week your project will hit critical mass.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Objectives Section -->
+      <section class="py-24 px-gutter relative" id="intelligence">
+        <div class="max-w-container-max mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div class="glass-card p-12 rounded-[2rem] relative">
+            <div class="absolute top-4 left-1/2 -translate-x-1/2 w-24 h-1 bg-white/10 rounded-full"></div>
+            <h2 class="font-display-lg text-headline-lg mb-8">Strategic Objectives</h2>
+            <div class="space-y-6">
+              <div class="p-6 rounded-2xl bg-surface/40 border border-white/5 hover:bg-primary/5 hover:border-primary/30 transition-all cursor-pointer group">
+                <div class="flex justify-between items-center mb-3">
+                  <span class="font-bold text-lg group-hover:text-primary transition-colors">Early Warning System</span>
+                  <span class="text-label-mono text-primary">01</span>
+                </div>
+                <p class="text-on-surface-variant text-sm">Identifying failure patterns 6-8 weeks before they impact the bottom line.</p>
+              </div>
+              <div class="p-6 rounded-2xl bg-surface/40 border border-white/5 hover:bg-tertiary/5 hover:border-tertiary/30 transition-all cursor-pointer group">
+                <div class="flex justify-between items-center mb-3">
+                  <span class="font-bold text-lg group-hover:text-tertiary transition-colors">Decision Support</span>
+                  <span class="text-label-mono text-tertiary">02</span>
+                </div>
+                <p class="text-on-surface-variant text-sm">Providing data-backed evidence for pivot, persistence, or project closure.</p>
+              </div>
+              <div class="p-6 rounded-2xl bg-surface/40 border border-white/5 hover:bg-secondary/5 hover:border-secondary/30 transition-all cursor-pointer group">
+                <div class="flex justify-between items-center mb-3">
+                  <span class="font-bold text-lg group-hover:text-secondary transition-colors">Resource Optimization</span>
+                  <span class="text-label-mono text-secondary">03</span>
+                </div>
+                <p class="text-on-surface-variant text-sm">Mapping developer strengths to high-risk modules for maximum stability.</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <span class="text-primary font-label-mono tracking-[0.2em] uppercase mb-6 block">The Workflow</span>
+            <h2 class="font-display-lg text-display-lg mb-8">Seamless Intelligence Pipeline</h2>
+            <div class="space-y-12 relative">
+              <div class="flex gap-6 items-start">
+                <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0 border border-primary/50 relative z-10">
+                  <span class="material-symbols-outlined text-primary">hub</span>
+                </div>
+                <div>
+                  <h4 class="font-bold text-xl mb-2">Data Ingestion</h4>
+                  <p class="text-on-surface-variant">Syncs with Jira, GitHub, and Slack to collect semantic and quantitative project telemetry.</p>
+                </div>
+              </div>
+              <div class="flex gap-6 items-start">
+                <div class="w-12 h-12 rounded-full bg-tertiary/20 flex items-center justify-center shrink-0 border border-tertiary/50 relative z-10">
+                  <span class="material-symbols-outlined text-tertiary">model_training</span>
+                </div>
+                <div>
+                  <h4 class="font-bold text-xl mb-2">ML Inference</h4>
+                  <p class="text-on-surface-variant">Proprietary XGBoost models cross-reference historical enterprise failure datasets.</p>
+                </div>
+              </div>
+              <div class="flex gap-6 items-start">
+                <div class="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center shrink-0 border border-secondary/50 relative z-10">
+                  <span class="material-symbols-outlined text-secondary">insights</span>
+                </div>
+                <div>
+                  <h4 class="font-bold text-xl mb-2">Risk Synthesis</h4>
+                  <p class="text-on-surface-variant">Actionable dashboard outputs including probability scores and mitigation playbooks.</p>
+                </div>
+              </div>
+              <div class="absolute left-[23px] top-4 bottom-4 w-[1px] bg-gradient-to-b from-primary via-tertiary to-secondary opacity-30"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Mini Simulator Section -->
+      <section class="py-24 px-gutter">
+        <div class="max-w-container-max mx-auto">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            <div class="glass-card p-10 rounded-[2.5rem]">
+              <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-8">Run Simulator</h3>
+              <div class="space-y-8">
+                <div class="space-y-4">
+                  <div class="flex justify-between items-center">
+                    <label class="font-bold text-sm">Allocated Budget ($M)</label>
+                    <span class="text-primary font-label-mono val-budget">$1.2M</span>
+                  </div>
+                  <input class="w-full slider-budget accent-primary" max="5000000" min="100000" type="range" value="1200000"/>
+                </div>
+                <div class="space-y-4">
+                  <div class="flex justify-between items-center">
+                    <label class="font-bold text-sm">Critical Bug Density</label>
+                    <span class="text-tertiary font-label-mono val-bug">Low Risk (0.12)</span>
+                  </div>
+                  <input class="w-full slider-bug accent-tertiary" max="1" min="0" step="0.01" type="range" value="0.12"/>
+                </div>
+                <div class="space-y-4">
+                  <div class="flex justify-between items-center">
+                    <label class="font-bold text-sm">Team Velocity Stability</label>
+                    <span class="text-secondary font-label-mono val-velocity">82%</span>
+                  </div>
+                  <input class="w-full slider-velocity accent-secondary" max="100" min="0" type="range" value="82"/>
+                </div>
+                <a href="#/simulation" class="w-full py-4 bg-primary text-on-primary rounded-xl font-bold mt-4 shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                  Launch Custom Engine
+                  <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </a>
+              </div>
+            </div>
+            <div class="flex flex-col justify-center">
+              <div class="glass-card p-12 rounded-[2.5rem] text-center border-primary/20">
+                <h4 class="text-sm font-label-mono text-on-surface-variant uppercase mb-8">Predicted Project Health</h4>
+                <div class="relative w-64 h-64 mx-auto mb-8">
+                  <svg class="w-full h-full transform -rotate-90">
+                    <circle class="text-white/5" cx="128" cy="128" fill="transparent" r="110" stroke="currentColor" stroke-width="20"></circle>
+                    <circle class="text-primary health-progress-ring" cx="128" cy="128" fill="transparent" r="110" stroke="currentColor" stroke-dasharray="691.15" stroke-dashoffset="172.78" stroke-width="20" style="transition: stroke-dashoffset 0.5s ease;"></circle>
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="text-6xl font-display-xl health-score-val">75</span>
+                    <span class="text-sm font-label-mono text-on-surface-variant">Health Index</span>
+                  </div>
+                </div>
+                <div class="px-6 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 inline-block font-bold health-status-pill">
+                  LOW RISK DETECTED
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+
+    <!-- ================= PAGE: DASHBOARD ================= -->
+    <section id="page-dashboard" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+        <!-- Header -->
+        <header class="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+              <span class="font-label-mono text-[12px] uppercase tracking-widest text-tertiary">System Online: Live Intelligence Feed</span>
+            </div>
+            <h1 class="font-display-lg text-display-lg text-on-surface">Executive Dashboard</h1>
+            <p class="text-on-surface-variant font-body-md mt-2 max-w-xl">Comprehensive risk analysis and computational insights for enterprise-level decision making.</p>
+          </div>
+          <div class="flex gap-4">
+            <div class="glass-panel px-4 py-2 rounded-xl flex items-center gap-3 border-white/10">
+              <span class="material-symbols-outlined text-primary">calendar_today</span>
+              <span class="font-label-mono text-[14px]">Q4 FY2026</span>
+            </div>
+            <button class="glass-panel px-6 py-2 rounded-xl flex items-center gap-2 border-white/10 hover:bg-white/5 transition-colors">
+              <span class="material-symbols-outlined">download</span>
+              <span class="font-body-md">Export PDF</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Bento Grid Content -->
+        <div class="grid grid-cols-12 gap-6">
+          <!-- KPI Section -->
+          <div class="col-span-12 md:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <!-- Total Projects -->
+            <div class="glass-panel p-6 rounded-[22px] glass-card-hover relative overflow-hidden group">
+              <div class="scanline"></div>
+              <div class="flex justify-between items-start mb-4">
+                <span class="material-symbols-outlined p-2 rounded-lg bg-primary/10 text-primary">folder_managed</span>
+                <span class="text-xs text-green-400 font-label-mono">+12.5%</span>
+              </div>
+              <h3 class="text-on-surface-variant font-body-md mb-1">Total Projects</h3>
+              <p class="text-4xl font-display-lg text-on-surface">1,284</p>
+            </div>
+            <!-- High Risk -->
+            <div class="glass-panel p-6 rounded-[22px] glass-card-hover relative overflow-hidden group border-red-500/30">
+              <div class="flex justify-between items-start mb-4">
+                <span class="material-symbols-outlined p-2 rounded-lg bg-red-500/10 text-red-400">warning</span>
+                <span class="text-xs text-red-400 font-label-mono">-2.4%</span>
+              </div>
+              <h3 class="text-on-surface-variant font-body-md mb-1">High Risk Units</h3>
+              <p class="text-4xl font-display-lg text-on-surface">42</p>
+            </div>
+            <!-- Model Accuracy -->
+            <div class="glass-panel p-6 rounded-[22px] glass-card-hover relative overflow-hidden group border-tertiary/30">
+              <div class="flex justify-between items-start mb-4">
+                <span class="material-symbols-outlined p-2 rounded-lg bg-tertiary/10 text-tertiary">psychology</span>
+                <span id="dashboard-model-status" class="text-xs text-tertiary font-label-mono">Optimized</span>
+              </div>
+              <h3 class="text-on-surface-variant font-body-md mb-1">Model Accuracy</h3>
+              <p class="text-4xl font-display-lg text-on-surface"><span id="dashboard-model-accuracy">99.8</span><span class="text-xl">%</span></p>
+            </div>
+            
+            <!-- Risk Trend Line Chart -->
+            <div class="col-span-12 glass-panel p-8 rounded-[22px] glass-card-hover min-h-[400px] flex flex-col">
+              <div class="flex justify-between items-center mb-8">
+                <div>
+                  <h3 class="font-headline-lg text-on-surface">Risk Mitigation Trends</h3>
+                  <p class="text-on-surface-variant text-sm">Real-time vector tracking of organizational vulnerability</p>
+                </div>
+                <div class="flex gap-4">
+                  <span class="flex items-center gap-1.5 text-xs font-label-mono text-primary">
+                    <span class="w-2 h-2 rounded-full bg-primary"></span> Predicted
+                  </span>
+                  <span class="flex items-center gap-1.5 text-xs font-label-mono text-tertiary">
+                    <span class="w-2 h-2 rounded-full bg-tertiary"></span> Actual
+                  </span>
+                </div>
+              </div>
+              <div class="flex-grow relative flex items-end justify-between gap-4 h-full pt-10">
+                <!-- Simulated Chart Path -->
+                <div class="absolute inset-0 flex items-center justify-center opacity-20">
+                  <svg class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 800 200">
+                    <path class="text-primary" d="M0,150 Q100,50 200,100 T400,80 T600,120 T800,40" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    <path class="text-tertiary" d="M0,180 Q100,120 200,150 T400,100 T600,140 T800,80" fill="none" stroke="currentColor" stroke-width="2"></path>
+                  </svg>
+                </div>
+                <!-- Simple Bars to represent data points for the aesthetic -->
+                <div class="w-full h-full flex items-end justify-between px-4 z-10">
+                  <div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 40%"></div>
+                  <div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 65%; animation-delay: 0.1s"></div>
+                  <div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 45%; animation-delay: 0.2s"></div>
+                  <div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 80%; animation-delay: 0.3s"></div>
+                  <div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 60%; animation-delay: 0.4s"></div>
+                  <div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 90%; animation-delay: 0.5s"></div>
+                  <div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 70%; animation-delay: 0.6s"></div>
+                </div>
+              </div>
+              <div class="flex justify-between mt-4 text-[10px] font-label-mono text-on-surface-variant uppercase tracking-widest">
+                <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span>
+              </div>
+            </div>
+            
+            <!-- Budget vs Risk Distribution (Bar Chart) -->
+            <div class="col-span-12 glass-panel p-6 rounded-[22px] glass-card-hover">
+              <h3 class="font-body-lg font-bold text-on-surface mb-6">Budget Allocation vs. Risk Factor</h3>
+              <div class="space-y-6">
+                <div class="space-y-2">
+                  <div class="flex justify-between text-xs font-label-mono text-on-surface-variant">
+                    <span>CYBER SECURITY</span>
+                    <span>88% Efficiency</span>
+                  </div>
+                  <div class="h-3 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary to-tertiary w-[88%] rounded-full shadow-[0_0_10px_rgba(173,198,255,0.4)]"></div>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <div class="flex justify-between text-xs font-label-mono text-on-surface-variant">
+                    <span>INFRASTRUCTURE</span>
+                    <span>64% Efficiency</span>
+                  </div>
+                  <div class="h-3 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary to-tertiary w-[64%] rounded-full shadow-[0_0_10px_rgba(173,198,255,0.4)]"></div>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <div class="flex justify-between text-xs font-label-mono text-on-surface-variant">
+                    <span>OPERATIONAL AI</span>
+                    <span>92% Efficiency</span>
+                  </div>
+                  <div class="h-3 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary to-tertiary w-[92%] rounded-full shadow-[0_0_10px_rgba(173,198,255,0.4)]"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Sidebar: Threat Vectors & Recent Analyses -->
+          <aside class="col-span-12 md:col-span-4 flex flex-col gap-6">
+            <!-- Threat Vectors Radar -->
+            <div class="glass-panel p-6 rounded-[22px] glass-card-hover flex flex-col items-center justify-center relative overflow-hidden min-h-[220px]">
+              <div class="absolute inset-0 pointer-events-none opacity-10">
+                <svg class="w-full h-full" viewBox="0 0 200 200">
+                  <circle cx="100" cy="100" fill="none" r="80" stroke="white" stroke-dasharray="2 4"></circle>
+                  <circle cx="100" cy="100" fill="none" r="50" stroke="white" stroke-dasharray="2 4"></circle>
+                  <line stroke="white" stroke-dasharray="2 4" x1="100" x2="100" y1="20" y2="180"></line>
+                  <line stroke="white" stroke-dasharray="2 4" x1="20" x2="180" y1="100" y2="100"></line>
+                </svg>
+              </div>
+              <h3 class="font-body-lg font-bold text-on-surface mb-2 self-start">Threat Vectors</h3>
+              <div class="relative w-40 h-40 flex items-center justify-center mt-4">
+                <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <polygon fill="rgba(173,198,255,0.2)" points="50,10 80,40 70,80 30,80 20,40" stroke="#adc6ff" stroke-width="2"></polygon>
+                  <circle cx="50" cy="10" fill="#adc6ff" r="2"></circle>
+                  <circle cx="80" cy="40" fill="#adc6ff" r="2"></circle>
+                  <circle cx="70" cy="80" fill="#adc6ff" r="2"></circle>
+                  <circle cx="30" cy="80" fill="#adc6ff" r="2"></circle>
+                  <circle cx="20" cy="40" fill="#adc6ff" r="2"></circle>
+                </svg>
+                <div class="absolute text-[8px] font-label-mono text-tertiary -top-4">VELOCITY</div>
+                <div class="absolute text-[8px] font-label-mono text-tertiary -right-10 top-1/2">IMPACT</div>
+                <div class="absolute text-[8px] font-label-mono text-tertiary -left-10 top-1/2">LATENCY</div>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-6 text-center">Multi-dimensional risk scoring active.</p>
+            </div>
+
+            <!-- Recent Analyses Feed -->
+            <div class="glass-panel rounded-[22px] p-6 flex flex-col flex-1">
+              <div class="flex items-center justify-between mb-8">
+                <h3 class="font-headline-lg text-on-surface">Recent Analyses</h3>
+                <span class="material-symbols-outlined text-on-surface-variant">more_vert</span>
+              </div>
+              <div class="space-y-6">
+                <div class="group cursor-pointer">
+                  <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                      <span class="material-symbols-outlined text-green-400">check_circle</span>
+                    </div>
+                    <div class="flex-grow">
+                      <div class="flex justify-between items-center">
+                        <h4 class="font-body-md font-bold text-on-surface">Project Helios</h4>
+                        <span class="text-[10px] font-label-mono text-on-surface-variant">2m ago</span>
+                      </div>
+                      <p class="text-sm text-on-surface-variant">Security Audit completed. Risk Score: 12/100</p>
+                      <div class="mt-2 flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-surface-variant text-on-surface-variant uppercase">Infrastructure</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-green-500/20 text-green-400 uppercase">Passed</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="group cursor-pointer">
+                  <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                      <span class="material-symbols-outlined text-red-400">error</span>
+                    </div>
+                    <div class="flex-grow">
+                      <div class="flex justify-between items-center">
+                        <h4 class="font-body-md font-bold text-on-surface">Mainframe Core</h4>
+                        <span class="text-[10px] font-label-mono text-on-surface-variant">45m ago</span>
+                      </div>
+                      <p class="text-sm text-on-surface-variant">Anomaly detected in latency patterns. Immediate action required.</p>
+                      <div class="mt-2 flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-surface-variant text-on-surface-variant uppercase">Network</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-red-500/20 text-red-400 uppercase">Critical</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="group cursor-pointer">
+                  <div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-tertiary/10 flex items-center justify-center shrink-0">
+                      <div class="w-4 h-4 border-2 border-tertiary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div class="flex-grow">
+                      <div class="flex justify-between items-center">
+                        <h4 class="font-body-md font-bold text-on-surface">Cloud Synthesis</h4>
+                        <span class="text-[10px] font-label-mono text-on-surface-variant">Processing</span>
+                      </div>
+                      <p class="text-sm text-on-surface-variant">Aggregating Q4 performance logs across 12 nodes...</p>
+                      <div class="mt-3 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div class="h-full bg-tertiary w-3/4 rounded-full"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: WORKFLOW ================= -->
+    <section id="page-workflow" class="page-section">
+      <div class="pt-32 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto pb-24">
+        <!-- Hero Section -->
+        <header class="mb-16">
+          <h1 class="font-display-xl text-display-xl mb-4 text-transparent bg-clip-text bg-gradient-to-r from-on-surface to-primary">
+            Intelligence Workflow
+          </h1>
+          <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+            Experience the computational engine driving RiskVision. From raw telemetry to predictive risk synthesis, every node is optimized for enterprise-grade precision.
+          </p>
+        </header>
+
+        <!-- Interactive Workflow Visualization -->
+        <section class="relative mb-24 min-h-[600px] no-scroll-animate">
+          <!-- SVG Connectors Background -->
+          <div class="absolute inset-0 pointer-events-none z-0">
+            <svg fill="none" height="100%" viewBox="0 0 1200 600" width="100%" xmlns="http://www.w3.org/2000/svg">
+              <path class="flow-line" d="M150 300C300 300 300 150 450 150" stroke="url(#gradient1)" stroke-width="2"></path>
+              <path class="flow-line" d="M150 300C300 300 300 450 450 450" stroke="url(#gradient1)" stroke-width="2"></path>
+              <path class="flow-line" d="M550 150C700 150 700 300 850 300" stroke="url(#gradient2)" stroke-width="2"></path>
+              <path class="flow-line" d="M550 450C700 450 700 300 850 300" stroke="url(#gradient2)" stroke-width="2"></path>
+              <defs>
+                <linearGradient id="gradient1" x1="0%" x2="100%" y1="0%" y2="0%">
+                  <stop offset="0%" stop-color="#4b8eff" stop-opacity="0"></stop>
+                  <stop offset="50%" stop-color="#4b8eff"></stop>
+                  <stop offset="100%" stop-color="#00dbe9"></stop>
+                </linearGradient>
+                <linearGradient id="gradient2" x1="0%" x2="100%" y1="0%" y2="0%">
+                  <stop offset="0%" stop-color="#00dbe9"></stop>
+                  <stop offset="50%" stop-color="#d1bcff"></stop>
+                  <stop offset="100%" stop-color="#adc6ff" stop-opacity="0"></stop>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+
+          <!-- Pipeline Cards Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+            
+            <!-- Left Side: Interactive Deep Dive Panel -->
+            <div class="glass-card p-12 rounded-[2rem] relative sticky top-32 z-20 min-h-[420px] flex flex-col justify-between">
+              <div class="absolute top-4 left-1/2 -translate-x-1/2 w-24 h-1 bg-white/10 rounded-full"></div>
+              
+              <div id="deep-dive-content" class="w-full">
+                <!-- DEFAULT STATE -->
+                <div id="default-view">
+                  <h2 class="font-display-lg text-headline-lg mb-8">Strategic Objectives</h2>
+                  <div class="space-y-6">
+                    <div class="p-6 rounded-2xl bg-surface/40 border border-white/5 hover:bg-primary/5 hover:border-primary/30 transition-all cursor-pointer group" onclick="showDeepDive(1)">
+                      <div class="flex justify-between items-center mb-3">
+                        <span class="font-bold text-lg group-hover:text-primary transition-colors">Early Warning System</span>
+                        <span class="text-label-mono text-primary">01</span>
+                      </div>
+                      <p class="text-on-surface-variant text-sm">Identifying failure patterns 6-8 weeks before they impact the bottom line.</p>
+                    </div>
+                    <div class="p-6 rounded-2xl bg-surface/40 border border-white/5 hover:bg-tertiary/5 hover:border-tertiary/30 transition-all cursor-pointer group" onclick="showDeepDive(2)">
+                      <div class="flex justify-between items-center mb-3">
+                        <span class="font-bold text-lg group-hover:text-tertiary transition-colors">Decision Support</span>
+                        <span class="text-label-mono text-tertiary">02</span>
+                      </div>
+                      <p class="text-on-surface-variant text-sm">Providing data-backed evidence for pivot, persistence, or project closure.</p>
+                    </div>
+                    <div class="p-6 rounded-2xl bg-surface/40 border border-white/5 hover:bg-secondary/5 hover:border-secondary/30 transition-all cursor-pointer group" onclick="showDeepDive(3)">
+                      <div class="flex justify-between items-center mb-3">
+                        <span class="font-bold text-lg group-hover:text-secondary transition-colors">Resource Optimization</span>
+                        <span class="text-label-mono text-secondary">03</span>
+                      </div>
+                      <p class="text-on-surface-variant text-sm">Mapping developer strengths to high-risk modules for maximum stability.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- TAB DEEP DIVE: 1 -->
+                <div class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500" id="deep-dive-1">
+                  <span class="text-primary font-label-mono text-xs uppercase tracking-widest mb-2 block">Deep Dive: Data Ingestion</span>
+                  <h2 class="font-display-lg text-headline-lg mb-6 text-primary">Native Ecosystem Integration</h2>
+                  <div class="space-y-6">
+                    <div class="flex gap-4 items-start p-4 rounded-xl bg-primary/5 border border-primary/20">
+                      <span class="material-symbols-outlined text-primary text-2xl">api</span>
+                      <div>
+                        <h4 class="font-bold mb-1 text-on-surface">Universal API Connectors</h4>
+                        <p class="text-sm text-on-surface-variant">Real-time bi-directional sync with Jira, GitHub Enterprise, and Slack. Automatically maps relational metadata across distributed teams.</p>
+                      </div>
+                    </div>
+                    <div class="flex gap-4 items-start p-4 rounded-xl bg-primary/5 border border-primary/20">
+                      <span class="material-symbols-outlined text-primary text-2xl">forum</span>
+                      <div>
+                        <h4 class="font-bold mb-1 text-on-surface">Semantic Sentiment Analysis</h4>
+                        <p class="text-sm text-on-surface-variant">NLP engines process PR comments and Slack conversations to detect team friction and burn-out markers before they manifest in code.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="w-full mt-8 py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-all text-sm font-bold text-primary" onclick="resetDeepDive()">Return to Objectives</button>
+                </div>
+
+                <!-- TAB DEEP DIVE: 2 -->
+                <div class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500" id="deep-dive-2">
+                  <span class="text-tertiary font-label-mono text-xs uppercase tracking-widest mb-2 block">Deep Dive: ML Inference</span>
+                  <h2 class="font-display-lg text-headline-lg mb-6 text-tertiary">The Neural Engine</h2>
+                  <div class="space-y-6">
+                    <div class="flex gap-4 items-start p-4 rounded-xl bg-tertiary/5 border border-tertiary/20">
+                      <span class="material-symbols-outlined text-tertiary text-2xl">database</span>
+                      <div>
+                        <h4 class="font-bold mb-1 text-on-surface">Historical Dataset: 100k+ Projects</h4>
+                        <p class="text-sm text-on-surface-variant">Our models are pre-trained on a massive repository of global enterprise SDLC data, covering diverse industries and tech stacks.</p>
+                      </div>
+                    </div>
+                    <div class="flex gap-4 items-start p-4 rounded-xl bg-tertiary/5 border border-tertiary/20">
+                      <span class="material-symbols-outlined text-tertiary text-2xl">settings_input_component</span>
+                      <div>
+                        <h4 class="font-bold mb-1 text-on-surface">XGBoost Hyper-Optimization</h4>
+                        <p class="text-sm text-on-surface-variant">Iterative K-fold cross-validation ensures model stability. Optimized for high-variance environments to eliminate false positives.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="w-full mt-8 py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-all text-sm font-bold text-tertiary" onclick="resetDeepDive()">Return to Objectives</button>
+                </div>
+
+                <!-- TAB DEEP DIVE: 3 -->
+                <div class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500" id="deep-dive-3">
+                  <span class="text-secondary font-label-mono text-xs uppercase tracking-widest mb-2 block">Deep Dive: Risk Synthesis</span>
+                  <h2 class="font-display-lg text-headline-lg mb-6 text-secondary">Strategic Intelligence</h2>
+                  <div class="space-y-6">
+                    <div class="flex gap-4 items-start p-4 rounded-xl bg-secondary/5 border border-secondary/20">
+                      <span class="material-symbols-outlined text-secondary text-2xl">assignment_turned_in</span>
+                      <div>
+                        <h4 class="font-bold mb-1 text-on-surface">Autonomous Mitigation Playbook</h4>
+                        <p class="text-sm text-on-surface-variant">Generates prioritized action items, including specific task re-allocations and CI/CD adjustments to restore project health.</p>
+                      </div>
+                    </div>
+                    <div class="flex gap-4 items-start p-4 rounded-xl bg-secondary/5 border border-secondary/20">
+                      <span class="material-symbols-outlined text-secondary text-2xl">rule</span>
+                      <div>
+                        <h4 class="font-bold mb-1 text-on-surface">Probability Confidence Scoring</h4>
+                        <p class="text-sm text-on-surface-variant">Every alert includes a certainty index based on the variance of the inference model, allowing executives to weigh risks accurately.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="w-full mt-8 py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-all text-sm font-bold text-secondary" onclick="resetDeepDive()">Return to Objectives</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: Pipeline Stages -->
+            <div class="space-y-12 relative z-10 pl-6">
+              <!-- Step Card 1 -->
+              <div class="workflow-card flex gap-6 items-start cursor-pointer group transition-all duration-300 hover:scale-[1.02] p-6 rounded-2xl hover:bg-white/5" data-step="1" onclick="showDeepDive(1)">
+                <div class="step-icon w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0 border border-primary/50 relative z-10 transition-all group-hover:step-active-glow">
+                  <span class="material-symbols-outlined text-primary text-xl">hub</span>
+                </div>
+                <div class="flex-1">
+                  <h4 class="font-bold text-xl mb-2 group-hover:text-primary transition-colors">Data Ingestion</h4>
+                  <p class="text-on-surface-variant group-hover:text-on-surface transition-colors">Syncs with Jira, GitHub, and Slack to collect semantic and quantitative project telemetry.</p>
+                  <span class="text-xs text-primary font-bold mt-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    Click for technical deep-dive <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                  </span>
+                </div>
+              </div>
+              <!-- Step Card 2 -->
+              <div class="workflow-card flex gap-6 items-start cursor-pointer group transition-all duration-300 hover:scale-[1.02] p-6 rounded-2xl hover:bg-white/5" data-step="2" onclick="showDeepDive(2)">
+                <div class="step-icon w-12 h-12 rounded-full bg-tertiary/20 flex items-center justify-center shrink-0 border border-tertiary/50 relative z-10 transition-all group-hover:step-active-glow">
+                  <span class="material-symbols-outlined text-tertiary text-xl">model_training</span>
+                </div>
+                <div class="flex-1">
+                  <h4 class="font-bold text-xl mb-2 group-hover:text-tertiary transition-colors">ML Inference</h4>
+                  <p class="text-on-surface-variant group-hover:text-on-surface transition-colors">Proprietary XGBoost models cross-reference historical datasets.</p>
+                  <span class="text-xs text-tertiary font-bold mt-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    Click for technical deep-dive <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                  </span>
+                </div>
+              </div>
+              <!-- Step Card 3 -->
+              <div class="workflow-card flex gap-6 items-start cursor-pointer group transition-all duration-300 hover:scale-[1.02] p-6 rounded-2xl hover:bg-white/5" data-step="3" onclick="showDeepDive(3)">
+                <div class="step-icon w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center shrink-0 border border-secondary/50 relative z-10 transition-all group-hover:step-active-glow">
+                  <span class="material-symbols-outlined text-secondary text-xl">insights</span>
+                </div>
+                <div class="flex-1">
+                  <h4 class="font-bold text-xl mb-2 group-hover:text-secondary transition-colors">Risk Synthesis</h4>
+                  <p class="text-on-surface-variant group-hover:text-on-surface transition-colors">Actionable outputs including probability health scores and mitigation playbooks.</p>
+                  <span class="text-xs text-secondary font-bold mt-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    Click for technical deep-dive <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                  </span>
+                </div>
+              </div>
+              <!-- Connector Gradient Line -->
+              <div class="workflow-connector absolute left-[41px] top-6 bottom-6 w-[2px] opacity-30 active-1" id="active-connector"></div>
+            </div>
+            
+          </div>
+        </section>
+
+        <!-- Technical Deep Dive: Stats Bento Grid -->
+        <section class="mb-24">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-4">
+            <div>
+              <h2 class="font-headline-lg text-headline-lg mb-2">Deep Learning Architecture</h2>
+              <p class="text-on-surface-variant font-body-md">Granular performance metrics for predictive reliability.</p>
+            </div>
+            <button class="text-primary font-bold flex items-center gap-2 hover:gap-3 transition-all">
+              View Model Specs <span class="material-symbols-outlined">arrow_forward</span>
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+            <!-- Large Stats Card -->
+            <div class="md:col-span-8 glass-card p-10 rounded-[32px] bg-surface-container-low overflow-hidden relative group min-h-[300px]">
+              <div class="absolute top-0 right-0 p-8">
+                <span class="material-symbols-outlined text-primary/10 text-9xl">analytics</span>
+              </div>
+              <div class="relative z-10 flex flex-col justify-between h-full">
+                <div>
+                  <span class="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-label-mono mb-6">TRAINING DYNAMICS</span>
+                  <h3 class="text-3xl font-display-lg mb-8 leading-tight">XGBoost Ensemble<br/>Optimized for Latency</h3>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                  <div>
+                    <span class="block text-on-surface-variant font-body-md text-xs mb-1">Epoch Accuracy</span>
+                    <span class="text-2xl md:text-3xl font-bold text-on-surface">99.82%</span>
+                  </div>
+                  <div>
+                    <span class="block text-on-surface-variant font-body-md text-xs mb-1">Loss Function</span>
+                    <span class="text-2xl md:text-3xl font-bold text-on-surface">0.004</span>
+                  </div>
+                  <div>
+                    <span class="block text-on-surface-variant font-body-md text-xs mb-1">Compute Time</span>
+                    <span class="text-2xl md:text-3xl font-bold text-on-surface">14ms</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Node distribution -->
+            <div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-surface-container-high flex flex-col justify-between min-h-[300px]">
+              <span class="material-symbols-outlined text-tertiary text-4xl">hub</span>
+              <div>
+                <h4 class="text-[20px] font-bold mb-2">Node Distribution</h4>
+                <p class="text-on-surface-variant text-body-md mb-4 text-sm">Heterogeneous data sources mapped across 24 edge nodes.</p>
+                <div class="flex -space-x-2">
+                  <div class="w-8 h-8 rounded-full border-2 border-surface bg-primary"></div>
+                  <div class="w-8 h-8 rounded-full border-2 border-surface bg-tertiary"></div>
+                  <div class="w-8 h-8 rounded-full border-2 border-surface bg-secondary"></div>
+                  <div class="w-8 h-8 rounded-full border-2 border-surface flex items-center justify-center bg-surface-variant text-[10px] text-white">+12</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Encrypted Telemetry -->
+            <div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-surface-container-high flex flex-col justify-between min-h-[220px]">
+              <span class="material-symbols-outlined text-secondary text-4xl">security</span>
+              <div>
+                <h4 class="text-[20px] font-bold mb-2">Encrypted Telemetry</h4>
+                <p class="text-on-surface-variant text-body-md text-sm">AES-256 GCM encryption active at rest and in transit.</p>
+              </div>
+            </div>
+
+            <!-- Inference Velocity -->
+            <div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-surface-container-high flex flex-col justify-between min-h-[220px] relative overflow-hidden">
+              <div class="absolute bottom-0 left-0 w-full h-1/2 opacity-20">
+                <svg class="w-full h-full" viewBox="0 0 100 40">
+                  <path class="text-tertiary" d="M0 40 Q 10 10 20 30 T 40 20 T 60 35 T 80 15 T 100 30" fill="none" stroke="currentColor" stroke-width="2"></path>
+                </svg>
+              </div>
+              <div class="relative z-10">
+                <span class="material-symbols-outlined text-on-surface-variant text-4xl">speed</span>
+                <h4 class="text-[20px] font-bold mt-4 mb-2">Inference Velocity</h4>
+                <p class="text-on-surface-variant text-body-md text-sm">Sub-millisecond decision cycles for rapid response.</p>
+              </div>
+            </div>
+
+            <!-- Call to Action Card -->
+            <div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-primary-container text-on-primary-container min-h-[220px]">
+              <div class="flex flex-col h-full justify-between">
+                <h4 class="text-[22px] font-bold leading-tight">Ready to integrate?</h4>
+                <p class="text-on-primary-container/80 text-body-md text-sm mb-4">Join 400+ enterprises running RiskVision.</p>
+                <a href="#/simulation" class="w-full bg-white text-on-primary-fixed text-center font-bold py-3 rounded-2xl active:scale-95 transition-all text-sm shadow">
+                  Request Demo
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: SIMULATION (PREDICTION ENGINE) ================= -->
+    <section id="page-simulation" class="page-section">
+      <div class="pt-32 pb-24 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+        <header class="mb-12">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary mb-4">
+            <span class="material-symbols-outlined text-[14px]">psychology</span>
+            <span class="font-label-mono text-label-mono uppercase tracking-widest">Prediction Core 2.0 · Live AI Engine</span>
+          </div>
+          <h1 class="font-display-xl text-display-xl max-w-2xl mb-4">Simulation Sandbox</h1>
+          <p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl">Fill in real project metrics and let the AI engine compute your risk score, identify failure drivers, and generate an action plan.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+          <!-- ─── Left: Full Prediction Form ─── -->
+          <section class="lg:col-span-7 space-y-gutter">
+
+            <!-- Primary metrics card -->
+            <div class="glass-card rounded-[22px] p-8 relative overflow-hidden">
+              <div class="scanline opacity-10"></div>
+              <h2 class="font-headline-lg text-headline-lg mb-8 flex items-center gap-3">
+                <span class="material-symbols-outlined text-primary">analytics</span>
+                Project Parameters
+              </h2>
+              <form id="prediction-form" class="space-y-6" onsubmit="event.preventDefault();">
+
+                <!-- Row 1: IDs -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Project ID</label>
+                    <input id="sim-project-id" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" type="text" value="SIM-1001" placeholder="e.g. PRJ-2026"/>
+                  </div>
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Project Name</label>
+                    <input id="sim-project-name" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" type="text" value="Aegis Deployment" placeholder="e.g. Aegis Platform"/>
+                  </div>
+                </div>
+
+                <!-- Row 2: Budget / Cost -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Planned Budget ($)</label>
+                    <input id="sim-budget" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" type="number" value="1200000" min="1" step="1000"/>
+                  </div>
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Actual Cost ($)</label>
+                    <input id="sim-actual-cost" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" type="number" value="950000" min="0" step="1000"/>
+                  </div>
+                </div>
+
+                <!-- Row 3: Timeline -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Planned Timeline (months)</label>
+                    <input id="sim-timeline" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" type="number" value="12" min="1" step="1"/>
+                  </div>
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Actual Duration (months)</label>
+                    <input id="sim-actual-duration" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" type="number" value="10" min="0" step="1"/>
+                  </div>
+                </div>
+
+                <!-- Row 4: Team / Status -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Team Size</label>
+                    <input id="sim-team-size" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" type="number" value="8" min="1" step="1"/>
+                  </div>
+                  <div>
+                    <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Project Status</label>
+                    <select id="sim-status" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm">
+                      <option value="active">Active</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="failed">Failed</option>
+                      <option value="on_hold">On Hold</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Divider -->
+                <div class="border-t border-white/5 pt-4">
+                  <h3 class="font-label-mono text-[10px] text-on-surface-variant uppercase mb-4 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm text-tertiary">tune</span>
+                    Advanced Risk Indicators
+                  </h3>
+                  <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Requirements Changed</label>
+                      <input id="sim-req-changed" class="w-full bg-surface-container border border-outline-variant/50 rounded-lg px-3 py-2 text-on-surface focus:outline-none focus:border-primary transition-all text-sm" type="number" value="8" min="0"/>
+                    </div>
+                    <div>
+                      <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Total Requirements</label>
+                      <input id="sim-req-total" class="w-full bg-surface-container border border-outline-variant/50 rounded-lg px-3 py-2 text-on-surface focus:outline-none focus:border-primary transition-all text-sm" type="number" value="40" min="1"/>
+                    </div>
+                    <div>
+                      <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Features Delivered</label>
+                      <input id="sim-features-delivered" class="w-full bg-surface-container border border-outline-variant/50 rounded-lg px-3 py-2 text-on-surface focus:outline-none focus:border-primary transition-all text-sm" type="number" value="32" min="0"/>
+                    </div>
+                    <div>
+                      <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Identified Risks</label>
+                      <input id="sim-risks" class="w-full bg-surface-container border border-outline-variant/50 rounded-lg px-3 py-2 text-on-surface focus:outline-none focus:border-primary transition-all text-sm" type="number" value="5" min="0"/>
+                    </div>
+                    <div>
+                      <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Total Tasks</label>
+                      <input id="sim-tasks" class="w-full bg-surface-container border border-outline-variant/50 rounded-lg px-3 py-2 text-on-surface focus:outline-none focus:border-primary transition-all text-sm" type="number" value="150" min="1"/>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Generate button -->
+                <div class="pt-2">
+                  <button id="btn-generate-prediction" type="submit" class="w-full bg-surface-bright border border-primary/30 py-4 rounded-xl font-body-lg font-bold text-primary flex items-center justify-center gap-3 group overflow-hidden relative hover:border-primary/60 hover:shadow-[0_0_30px_rgba(173,198,255,0.2)] active:scale-[0.98] transition-all predict-btn">
+                    <span class="relative z-10">Generate AI Risk Assessment</span>
+                    <span class="material-symbols-outlined relative z-10 group-hover:translate-x-1 transition-transform">bolt</span>
+                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  </button>
+                </div>
+
+              </form>
+            </div>
+
+            <!-- Legacy Sliders Card (local estimate) -->
+            <div class="glass-card rounded-[22px] p-6 relative overflow-hidden">
+              <div class="flex items-center gap-2 mb-4">
+                <span class="material-symbols-outlined text-secondary text-base">speed</span>
+                <h3 class="font-headline-lg-mobile text-headline-lg-mobile">Quick Visual Estimator</h3>
+                <span class="ml-auto text-[10px] font-label-mono text-on-surface-variant uppercase px-2 py-0.5 border border-outline-variant rounded">Client-Side</span>
+              </div>
+              <div class="space-y-5">
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <label class="font-label-mono text-[10px] text-on-surface-variant uppercase">Allocated Budget</label>
+                    <span class="font-label-mono text-primary val-budget text-sm">$1.2M</span>
+                  </div>
+                  <input class="w-full slider-budget accent-primary" max="5000000" min="100000" type="range" value="1200000"/>
+                </div>
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <label class="font-label-mono text-[10px] text-on-surface-variant uppercase">Bug Density</label>
+                    <span class="font-label-mono text-tertiary val-bug text-sm">Low Risk (0.12)</span>
+                  </div>
+                  <input class="w-full slider-bug accent-tertiary" max="1" min="0" step="0.01" type="range" value="0.12"/>
+                </div>
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <label class="font-label-mono text-[10px] text-on-surface-variant uppercase">Team Velocity</label>
+                    <span class="font-label-mono text-secondary val-velocity text-sm">82%</span>
+                  </div>
+                  <input class="w-full slider-velocity accent-secondary" max="100" min="0" type="range" value="82"/>
+                </div>
+              </div>
+            </div>
+
+          </section>
+
+          <!-- ─── Right: Gauge + AI Result Panel ─── -->
+          <section class="lg:col-span-5 space-y-gutter">
+
+            <!-- Health Gauge -->
+            <div class="glass-card rounded-[22px] p-10 flex flex-col items-center justify-center relative min-h-[380px] text-center">
+              <div class="relative z-10 w-full flex flex-col items-center">
+                <div class="w-56 h-56 relative flex items-center justify-center mb-6">
+                  <svg class="w-full h-full transform -rotate-90 absolute inset-0">
+                    <circle class="text-white/5" cx="112" cy="112" fill="transparent" r="96" stroke="currentColor" stroke-width="16"></circle>
+                    <circle class="text-tertiary health-progress-ring transition-all duration-700" cx="112" cy="112" fill="transparent" r="96" stroke="currentColor" stroke-dasharray="603.2" stroke-dashoffset="150.8" stroke-width="16" style="transition: stroke-dashoffset 0.7s ease, stroke 0.5s ease;"></circle>
+                  </svg>
+                  <div class="flex flex-col items-center justify-center">
+                    <span class="font-label-mono text-on-surface-variant uppercase text-[9px] mb-1">Risk Score</span>
+                    <span class="font-display-xl text-display-xl leading-none text-tertiary health-score-val">75</span>
+                    <span class="font-label-mono text-on-surface-variant mt-1 text-[9px]">/ 100</span>
+                  </div>
+                </div>
+                <div class="health-status-pill px-6 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 inline-block font-bold text-sm">
+                  LOW RISK DETECTED
+                </div>
+                <p class="font-body-md text-on-surface-variant text-xs max-w-xs mx-auto mt-3">Click "Generate AI Risk Assessment" to analyze your project with the live ML model.</p>
+              </div>
+            </div>
+
+            <!-- AI Prediction Result Panel (populated after submission) -->
+            <div id="prediction-result-panel" class="glass-card rounded-[22px] p-6 border-l-4 border-l-primary hidden">
+              <!-- Content rendered by simulator.js -->
+            </div>
+
+            <!-- Default AI Insights (shown before first prediction) -->
+            <div id="default-insights-panel" class="glass-card rounded-[22px] p-8 border-l-4 border-l-primary">
+              <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                </div>
+                <div>
+                  <h3 class="font-headline-lg-mobile text-headline-lg-mobile leading-tight">AI Insights</h3>
+                  <p class="font-label-mono text-label-mono text-on-surface-variant uppercase text-[10px]">Awaiting First Analysis</p>
+                </div>
+              </div>
+              <div class="space-y-4">
+                <div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
+                  <span class="material-symbols-outlined text-primary mt-1">psychology</span>
+                  <div class="flex-1">
+                    <h4 class="font-body-md font-bold text-on-surface text-sm">Live AI Analysis Ready</h4>
+                    <p class="font-body-md text-xs text-on-surface-variant">Fill in the project parameters and click "Generate AI Risk Assessment" to get real predictions from the trained ML model.</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
+                  <span class="material-symbols-outlined text-tertiary mt-1">bolt</span>
+                  <div class="flex-1">
+                    <h4 class="font-body-md font-bold text-on-surface text-sm">12-Stage Pipeline</h4>
+                    <p class="font-body-md text-xs text-on-surface-variant">Your input passes through SHAP explainability, feature engineering, and XGBoost inference to produce a confidence-scored risk report.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </section>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: LOGIN ================= -->
+    <section id="page-login" class="page-section">
+      <div class="min-h-[80vh] flex items-center justify-center pt-32 pb-20 px-gutter">
+        <div class="max-w-md w-full glass-card rounded-[32px] p-10 relative overflow-hidden">
+          <div class="scanline opacity-10"></div>
+          <div class="text-center mb-8">
+            <h1 class="font-display-lg text-display-lg text-primary mb-2">Sign In</h1>
+            <p class="text-on-surface-variant text-sm">Access Predictive Risk Intelligence</p>
+          </div>
+          <form id="form-login" class="space-y-6">
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Email Address</label>
+              <input id="login-email" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm" type="email" placeholder="name@company.com"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Password</label>
+              <input id="login-password" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm" type="password" placeholder="••••••••"/>
+            </div>
+            <div class="flex justify-between items-center text-xs">
+              <a class="text-primary hover:underline" href="#/forgot-password">Forgot Password?</a>
+              <a class="text-primary hover:underline" href="#/register">Create Account</a>
+            </div>
+            <button type="submit" class="w-full bg-primary text-on-primary py-3.5 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] active:scale-[0.98] transition-all flex justify-center items-center gap-2">
+              Authenticate
+              <span class="material-symbols-outlined text-sm">login</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: REGISTER ================= -->
+    <section id="page-register" class="page-section">
+      <div class="min-h-[80vh] flex items-center justify-center pt-32 pb-20 px-gutter">
+        <div class="max-w-md w-full glass-card rounded-[32px] p-10 relative overflow-hidden">
+          <div class="scanline opacity-10"></div>
+          <div class="text-center mb-8">
+            <h1 class="font-display-lg text-display-lg text-primary mb-2">Register</h1>
+            <p class="text-on-surface-variant text-sm">Create an analyst account</p>
+          </div>
+          <form id="form-register" class="space-y-5">
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Username</label>
+              <input id="reg-username" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm" type="text" placeholder="janedoe"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Email Address</label>
+              <input id="reg-email" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm" type="email" placeholder="jane@company.com"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Full Name</label>
+              <input id="reg-fullname" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm" type="text" placeholder="Jane Doe"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Password (Min 8 chars, Upper, Number, Special)</label>
+              <input id="reg-password" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm" type="password" placeholder="••••••••"/>
+            </div>
+            <div class="text-right text-xs">
+              <a class="text-primary hover:underline" href="#/login">Have an account? Sign In</a>
+            </div>
+            <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] active:scale-[0.98] transition-all flex justify-center items-center gap-2">
+              Create Account
+              <span class="material-symbols-outlined text-sm">person_add</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: FORGOT PASSWORD ================= -->
+    <section id="page-forgot-password" class="page-section">
+      <div class="min-h-[80vh] flex items-center justify-center pt-32 pb-20 px-gutter">
+        <div class="max-w-md w-full glass-card rounded-[32px] p-10 relative overflow-hidden">
+          <div class="scanline opacity-10"></div>
+          <div class="text-center mb-8">
+            <h1 class="font-display-lg text-display-lg text-primary mb-2">Forgot Password</h1>
+            <p class="text-on-surface-variant text-sm">Request password reset link</p>
+          </div>
+          <form id="form-forgot" class="space-y-6">
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-2">Email Address</label>
+              <input id="forgot-email" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm" type="email" placeholder="name@company.com"/>
+            </div>
+            <div class="flex justify-between items-center text-xs">
+              <a class="text-primary hover:underline" href="#/login">Back to Login</a>
+            </div>
+            <button type="submit" class="w-full bg-primary text-on-primary py-3.5 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] active:scale-[0.98] transition-all">
+              Send Reset Request
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: PROJECTS CRUD ================= -->
+    <section id="page-projects" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto space-y-gutter">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
+          <div>
+            <h1 class="font-display-lg text-display-lg text-on-surface">SDLC Projects Registry</h1>
+            <p class="text-on-surface-variant font-body-md mt-2">Create, modify, and track projects for predictive risk assessment.</p>
+          </div>
+          <button onclick="openCreateProjectModal()" class="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold active:scale-95 transition-transform flex items-center gap-2 hover:shadow-[0_0_20px_rgba(173,198,255,0.3)]">
+            <span class="material-symbols-outlined">add</span> Create Project
+          </button>
+        </header>
+
+        <!-- Filters -->
+        <div class="glass-panel p-6 rounded-2xl flex flex-wrap gap-4 items-center justify-between border-white/10">
+          <div class="flex flex-wrap gap-4 items-center flex-1">
+            <input id="prj-search" class="bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface text-sm max-w-xs focus:outline-none" placeholder="Search projects..."/>
+            <select id="prj-filter-status" class="bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface text-sm focus:outline-none">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="failed">Failed</option>
+              <option value="on_hold">On Hold</option>
+            </select>
+            <select id="prj-filter-risk" class="bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface text-sm focus:outline-none">
+              <option value="">All Risks</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
+          <button onclick="loadProjectsList()" class="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-bold text-primary flex items-center gap-2">
+            <span class="material-symbols-outlined">sync</span> Apply Filters
+          </button>
+        </div>
+
+        <!-- Projects Grid -->
+        <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Populated by app.js -->
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-between items-center pt-6 border-t border-white/10">
+          <span id="projects-pagination-info" class="text-xs text-on-surface-variant font-label-mono">Showing projects 0-0 of 0</span>
+          <div class="flex gap-2">
+            <button id="btn-projects-prev" class="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold disabled:opacity-50" onclick="changeProjectsPage(-1)">Previous</button>
+            <button id="btn-projects-next" class="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold disabled:opacity-50" onclick="changeProjectsPage(1)">Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Create/Edit Project Modal Overlay -->
+    <div id="modal-project" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[999] hidden flex items-center justify-center p-4">
+      <div class="max-w-2xl w-full glass-card rounded-[32px] p-8 max-h-[90vh] overflow-y-auto relative">
+        <h2 id="modal-project-title" class="font-headline-lg text-headline-lg mb-6">Create New Project</h2>
+        <form id="form-project" class="space-y-6">
+          <input type="hidden" id="project-modal-edit-id"/>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Project ID (External)</label>
+              <input id="proj-id" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2 text-on-surface text-sm" placeholder="PRJ-1001"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Project Name</label>
+              <input id="proj-name" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2 text-on-surface text-sm" placeholder="Enterprise Dashboard"/>
+            </div>
+          </div>
+          <div>
+            <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Description</label>
+            <textarea id="proj-desc" rows="2" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2 text-on-surface text-sm" placeholder="Brief outline of the project scope"></textarea>
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Budget ($)</label>
+              <input id="proj-budget" type="number" required class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface text-sm" value="500000"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Actual Cost ($)</label>
+              <input id="proj-cost" type="number" class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface text-sm" value="0"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Timeline (months)</label>
+              <input id="proj-timeline" type="number" required class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface text-sm" value="12"/>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Actual Duration (m)</label>
+              <input id="proj-duration" type="number" class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface text-sm" value="0"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Team Size</label>
+              <input id="proj-teamsize" type="number" required class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface text-sm" value="5"/>
+            </div>
+            <div>
+              <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Status</label>
+              <select id="proj-status" class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface text-sm">
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="failed">Failed</option>
+                <option value="on_hold">On Hold</option>
+              </select>
+            </div>
+          </div>
+          <div class="border-t border-white/5 pt-4">
+            <h4 class="font-label-mono text-[10px] text-on-surface-variant uppercase mb-3">Metrics Indicators</h4>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div>
+                <label class="block font-label-mono text-[8px] text-on-surface-variant uppercase">Req Changed</label>
+                <input id="proj-req-changed" type="number" class="w-full bg-surface-container-low border border-outline-variant rounded px-2 py-1.5 text-on-surface text-xs" value="0"/>
+              </div>
+              <div>
+                <label class="block font-label-mono text-[8px] text-on-surface-variant uppercase">Total Req</label>
+                <input id="proj-req-total" type="number" class="w-full bg-surface-container-low border border-outline-variant rounded px-2 py-1.5 text-on-surface text-xs" value="20"/>
+              </div>
+              <div>
+                <label class="block font-label-mono text-[8px] text-on-surface-variant uppercase">Delivered</label>
+                <input id="proj-features-del" type="number" class="w-full bg-surface-container-low border border-outline-variant rounded px-2 py-1.5 text-on-surface text-xs" value="0"/>
+              </div>
+              <div>
+                <label class="block font-label-mono text-[8px] text-on-surface-variant uppercase">Risks</label>
+                <input id="proj-risks" type="number" class="w-full bg-surface-container-low border border-outline-variant rounded px-2 py-1.5 text-on-surface text-xs" value="0"/>
+              </div>
+              <div>
+                <label class="block font-label-mono text-[8px] text-on-surface-variant uppercase">Tasks</label>
+                <input id="proj-tasks" type="number" class="w-full bg-surface-container-low border border-outline-variant rounded px-2 py-1.5 text-on-surface text-xs" value="50"/>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-end gap-3 pt-4">
+            <button type="button" onclick="closeCreateProjectModal()" class="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-bold text-on-surface">Cancel</button>
+            <button type="submit" class="px-6 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold">Save Project</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+
+    <!-- ================= PAGE: PREDICTION HISTORY ================= -->
+    <section id="page-predictions" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto space-y-gutter">
+        <header class="mb-10">
+          <h1 class="font-display-lg text-display-lg text-on-surface">Risk Prediction History</h1>
+          <p class="text-on-surface-variant font-body-md mt-2">Detailed audit logs of historical ML predictions, SHAP calculations, and actionable advice reports.</p>
+        </header>
+
+        <!-- Predictions Table Card -->
+        <div class="glass-panel rounded-3xl overflow-hidden border-white/10">
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left text-sm text-on-surface">
+              <thead>
+                <tr class="bg-surface-container border-b border-white/10 font-label-mono text-[10px] uppercase text-on-surface-variant tracking-wider">
+                  <th class="p-6">Project ID</th>
+                  <th class="p-6">Project Name</th>
+                  <th class="p-6">Risk Category</th>
+                  <th class="p-6 text-center">Score</th>
+                  <th class="p-6 text-center">Fail Prob.</th>
+                  <th class="p-6">Assessment Date</th>
+                  <th class="p-6 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="predictions-table-body" class="divide-y divide-white/5">
+                <!-- Populated dynamically by app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-between items-center pt-6">
+          <span id="predictions-pagination-info" class="text-xs text-on-surface-variant font-label-mono">Showing predictions 0-0 of 0</span>
+          <div class="flex gap-2">
+            <button id="btn-predictions-prev" class="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold disabled:opacity-50" onclick="changePredictionsPage(-1)">Previous</button>
+            <button id="btn-predictions-next" class="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold disabled:opacity-50" onclick="changePredictionsPage(1)">Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: MODEL TRAINING & REGISTRY ================= -->
+    <section id="page-training" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto space-y-gutter">
+        <header class="mb-12">
+          <h1 class="font-display-lg text-display-lg text-on-surface">Model Registry & Training</h1>
+          <p class="text-on-surface-variant font-body-md mt-2">Manage neural configurations, upload CSV training sets, trigger manual retraining runs, and manage pipeline rollbacks.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+          <!-- Active model summary -->
+          <div class="lg:col-span-4 space-y-6">
+            <div class="glass-card rounded-3xl p-8 relative overflow-hidden">
+              <div class="scanline opacity-10"></div>
+              <h3 class="font-headline-lg-mobile text-headline-lg-mobile mb-6">Active Model Version</h3>
+              <div class="space-y-4 font-body-md text-sm">
+                <div class="flex justify-between border-b border-white/5 pb-2">
+                  <span class="text-on-surface-variant">Version Tag</span>
+                  <span id="active-model-tag" class="font-label-mono font-bold text-primary">Checking...</span>
+                </div>
+                <div class="flex justify-between border-b border-white/5 pb-2">
+                  <span class="text-on-surface-variant">Algorithm</span>
+                  <span id="active-model-algorithm" class="font-bold">Checking...</span>
+                </div>
+                <div class="flex justify-between border-b border-white/5 pb-2">
+                  <span class="text-on-surface-variant">CV F1 Score</span>
+                  <span id="active-model-cv-score" class="font-bold text-tertiary">Checking...</span>
+                </div>
+                <div class="flex justify-between border-b border-white/5 pb-2">
+                  <span class="text-on-surface-variant">Test Accuracy</span>
+                  <span id="active-model-accuracy" class="font-bold">Checking...</span>
+                </div>
+                <div class="flex justify-between border-b border-white/5 pb-2">
+                  <span class="text-on-surface-variant">Trained On</span>
+                  <span id="active-model-date" class="text-xs">Checking...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upload Retraining Form -->
+            <div class="glass-card rounded-3xl p-8 space-y-6">
+              <h3 class="font-headline-lg-mobile text-headline-lg-mobile">Retrain Model Sandbox</h3>
+              <form id="form-retrain" class="space-y-4">
+                <div class="border-2 border-dashed border-white/10 rounded-2xl p-6 text-center hover:border-primary/40 transition-colors cursor-pointer relative" id="drop-zone-dataset">
+                  <input type="file" id="dataset-file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".csv,.xlsx,.json"/>
+                  <span class="material-symbols-outlined text-4xl text-on-surface-variant mb-2">cloud_upload</span>
+                  <p class="text-xs text-on-surface-variant font-bold" id="dataset-upload-status">Drag & drop raw dataset or click to browse (.csv, .xlsx, .json)</p>
+                </div>
+                <div>
+                  <label class="block font-label-mono text-[9px] text-on-surface-variant uppercase mb-1">Retraining Notes</label>
+                  <textarea id="retrain-notes" rows="2" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-on-surface text-xs focus:outline-none" placeholder="Explain dataset content / update purpose"></textarea>
+                </div>
+                <button type="submit" id="btn-trigger-retrain" class="w-full bg-primary text-on-primary py-3 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] active:scale-[0.98] transition-all flex justify-center items-center gap-2">
+                  Initiate Retraining
+                  <span class="material-symbols-outlined text-sm">precision_manufacturing</span>
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Model Registry versions -->
+          <div class="lg:col-span-8 glass-panel p-8 rounded-3xl border-white/10 space-y-6">
+            <h3 class="font-headline-lg text-on-surface">Retraining Version Registry</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full border-collapse text-left text-sm text-on-surface">
+                <thead>
+                  <tr class="bg-surface-container border-b border-white/10 font-label-mono text-[10px] uppercase text-on-surface-variant tracking-wider">
+                    <th class="p-4">Version</th>
+                    <th class="p-4">Algorithm</th>
+                    <th class="p-4 text-center">F1 Score</th>
+                    <th class="p-4 text-center">Accuracy</th>
+                    <th class="p-4">Created Date</th>
+                    <th class="p-4 text-center">Status</th>
+                    <th class="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="model-versions-table-body" class="divide-y divide-white/5">
+                  <!-- Populated dynamically by app.js -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: NOTIFICATIONS ================= -->
+    <section id="page-notifications" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto space-y-gutter">
+        <header class="flex justify-between items-end mb-8">
+          <div>
+            <h1 class="font-display-lg text-display-lg text-on-surface">System Alerts & Notifications</h1>
+            <p class="text-on-surface-variant font-body-md mt-2">Log and trace security, prediction warnings, and retraining alert status.</p>
+          </div>
+          <button onclick="markAllNotificationsReadAction()" class="text-xs text-primary font-bold flex items-center gap-1.5 border border-primary/20 px-4 py-2 rounded-xl hover:bg-primary/5">
+            <span class="material-symbols-outlined text-sm">done_all</span> Mark All Read
+          </button>
+        </header>
+
+        <div id="notifications-list" class="space-y-4 max-w-3xl">
+          <!-- Populated by app.js -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: USER PROFILE ================= -->
+    <section id="page-profile" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto space-y-gutter">
+        <header class="mb-10">
+          <h1 class="font-display-lg text-display-lg text-on-surface">User Profile</h1>
+          <p class="text-on-surface-variant font-body-md mt-2">Manage authentication, roles, and profile settings.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+          <!-- Profile Card -->
+          <div class="glass-card rounded-3xl p-8 space-y-6">
+            <div class="flex items-center gap-4 border-b border-white/5 pb-6">
+              <span class="material-symbols-outlined text-6xl text-primary">account_circle</span>
+              <div>
+                <h3 id="profile-fullname" class="text-2xl font-bold">Analyst Profile</h3>
+                <span id="profile-role" class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-primary/20 text-primary uppercase">Viewer</span>
+              </div>
+            </div>
+            <div class="space-y-4 text-sm font-body-md">
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-on-surface-variant">Username</span>
+                <span id="profile-username" class="font-bold">janedoe</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-on-surface-variant">Email Address</span>
+                <span id="profile-email" class="font-bold">jane@company.com</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-on-surface-variant">Account Status</span>
+                <span class="text-green-400 font-bold">Active & Verified</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-on-surface-variant">Member Since</span>
+                <span id="profile-created-date" class="text-xs">July 2026</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Change Password Card -->
+          <div class="glass-card rounded-3xl p-8">
+            <h3 class="font-headline-lg-mobile text-headline-lg-mobile mb-6">Change Account Password</h3>
+            <form id="form-change-password" class="space-y-5">
+              <div>
+                <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">Current Password</label>
+                <input id="chg-curr-pwd" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface text-sm focus:outline-none" type="password" placeholder="••••••••"/>
+              </div>
+              <div>
+                <label class="block font-label-mono text-[10px] text-on-surface-variant uppercase mb-1">New Password (Min 8 chars)</label>
+                <input id="chg-new-pwd" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2.5 text-on-surface text-sm focus:outline-none" type="password" placeholder="••••••••"/>
+              </div>
+              <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] active:scale-[0.98] transition-all">
+                Update Password
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: SETTINGS ================= -->
+    <section id="page-settings" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto space-y-gutter">
+        <header class="mb-10">
+          <h1 class="font-display-lg text-display-lg text-on-surface">Platform Settings</h1>
+          <p class="text-on-surface-variant font-body-md mt-2">Adjust risk margins, model metrics limits, and notifications toggles.</p>
+        </header>
+
+        <div class="max-w-2xl glass-card rounded-3xl p-8 space-y-6">
+          <h3 class="text-xl font-bold mb-4">Risk Modeling Presets</h3>
+          <div class="space-y-4">
+            <div class="flex justify-between items-center border-b border-white/5 pb-4">
+              <div>
+                <h4 class="font-bold text-sm">Auto-Retrain Threshold</h4>
+                <p class="text-xs text-on-surface-variant">Schedule auto-training on Sunday midnight if validation drift occurs.</p>
+              </div>
+              <input type="checkbox" class="w-10 h-5 bg-white/10 rounded-full appearance-none checked:bg-primary transition-all relative after:content-[''] after:w-5 after:h-5 after:rounded-full after:bg-white after:absolute after:left-0 checked:after:left-5 after:transition-all cursor-pointer"/>
+            </div>
+            <div class="flex justify-between items-center border-b border-white/5 pb-4">
+              <div>
+                <h4 class="font-bold text-sm">Security Audit Notifications</h4>
+                <p class="text-xs text-on-surface-variant">Send email alert if model evaluation grade drops below B.</p>
+              </div>
+              <input type="checkbox" checked class="w-10 h-5 bg-white/10 rounded-full appearance-none checked:bg-primary transition-all relative after:content-[''] after:w-5 after:h-5 after:rounded-full after:bg-white after:absolute after:left-0 checked:after:left-5 after:transition-all cursor-pointer"/>
+            </div>
+          </div>
+          <button class="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold" onclick="showToast('Settings saved successfully.', 'success')">Save Configuration</button>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: ADMIN / AUDIT LOGS ================= -->
+    <section id="page-admin" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto space-y-gutter">
+        <header class="mb-10">
+          <h1 class="font-display-lg text-display-lg text-on-surface">Platform Administration</h1>
+          <p class="text-on-surface-variant font-body-md mt-2">Security audits, user roles registry, and transactional logs tracing.</p>
+        </header>
+
+        <!-- Audit log records table -->
+        <div class="glass-panel rounded-3xl overflow-hidden border-white/10">
+          <h3 class="p-6 font-bold text-lg border-b border-white/10">Security Audit Trail</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left text-sm text-on-surface">
+              <thead>
+                <tr class="bg-surface-container border-b border-white/10 font-label-mono text-[10px] uppercase text-on-surface-variant tracking-wider">
+                  <th class="p-4">Timestamp</th>
+                  <th class="p-4">Action</th>
+                  <th class="p-4">User</th>
+                  <th class="p-4">IP Address</th>
+                  <th class="p-4">Resource</th>
+                  <th class="p-4">Status</th>
+                  <th class="p-4">Description</th>
+                </tr>
+              </thead>
+              <tbody id="audit-table-body" class="divide-y divide-white/5">
+                <!-- Populated dynamically by app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-between items-center pt-6">
+          <span id="audit-pagination-info" class="text-xs text-on-surface-variant font-label-mono">Showing logs 0-0 of 0</span>
+          <div class="flex gap-2">
+            <button id="btn-audit-prev" class="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold disabled:opacity-50" onclick="changeAuditPage(-1)">Previous</button>
+            <button id="btn-audit-next" class="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold disabled:opacity-50" onclick="changeAuditPage(1)">Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: HELP ================= -->
+    <section id="page-help" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto max-w-3xl space-y-6">
+        <h1 class="font-display-lg text-display-lg text-on-surface mb-6">User Documentation</h1>
+        <div class="space-y-4 text-on-surface-variant font-body-md leading-relaxed">
+          <div class="p-6 glass-card rounded-2xl">
+            <h3 class="font-bold text-on-surface text-lg mb-2">How Project Risk Predictions Work?</h3>
+            <p class="text-sm">RiskVision AI combines XGBoost algorithms with SHAP game theory values. When you input SDLC metrics (budget, cost overruns, timeline delays, velocity drift, and bug densities), the backend scales values and computes early-failure probability percentages with high confidence scoring.</p>
+          </div>
+          <div class="p-6 glass-card rounded-2xl">
+            <h3 class="font-bold text-on-surface text-lg mb-2">How Model Retraining operates?</h3>
+            <p class="text-sm">Analysts with high permissions can upload a CSV training set on the Models tab. The backend preprocesses the files, splits values, and runs parallel training across Random Forest and Gradient Boosting metrics, selecting the optimized best-F1 model for future predictions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PAGE: ABOUT ================= -->
+    <section id="page-about" class="page-section">
+      <div class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto max-w-3xl space-y-6">
+        <h1 class="font-display-lg text-display-lg text-on-surface mb-6">About RiskVision AI</h1>
+        <div class="glass-card rounded-3xl p-8 space-y-6 text-on-surface-variant font-body-md leading-relaxed">
+          <p class="text-sm">RiskVision AI is an advanced enterprise-grade Software Project Graveyard Analyzer. Combining early warning neural diagnostics, automated mitigation playbooks, and transparent SHAP explanations, we give managers full security control over SDLC project deliveries.</p>
+          <div class="flex items-center gap-4 text-xs font-label-mono text-primary">
+            <span>PLATFORM: v2.0.0</span>
+            <span>·</span>
+            <span>BACKEND: FastAPI 0.139</span>
+            <span>·</span>
+            <span>MODEL: XGBoost/SHAP</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+  </main>
+
+  <!-- Common Footer -->
+  <footer class="w-full mt-20 bg-surface-container-lowest/40 backdrop-blur-2xl border-t border-white/10 flex flex-col md:flex-row justify-between items-center px-8 md:px-16 py-12 max-w-container-max mx-auto rounded-t-[40px]">
+    <div class="mb-8 md:mb-0">
+      <div class="flex items-center gap-3 mb-4">
+        <img alt="Logo" class="h-6 w-6" src="assets/logo.svg"/>
+        <span class="font-display-lg text-headline-lg-mobile text-primary">RiskVision AI</span>
+      </div>
+      <p class="text-on-surface-variant text-sm max-w-xs">Neural Intelligence for Enterprise Risk. Predicting failure so you can build success.</p>
+    </div>
+    <div class="flex flex-col items-center md:items-end gap-6">
+      <div class="flex gap-8">
+        <a class="text-on-surface-variant hover:text-tertiary transition-colors text-body-md font-body-md" href="#">Privacy Policy</a>
+        <a class="text-on-surface-variant hover:text-tertiary transition-colors text-body-md font-body-md" href="#">Terms of Service</a>
+        <a class="text-on-surface-variant hover:text-tertiary transition-colors text-body-md font-body-md" href="#">API Docs</a>
+        <a class="text-on-surface-variant hover:text-tertiary transition-colors text-body-md font-body-md" href="#">Support</a>
+      </div>
+      <div class="flex gap-4">
+        <div class="w-10 h-10 rounded-full glass-card flex items-center justify-center text-on-surface-variant hover:text-primary cursor-pointer transition-colors hover:scale-105">
+          <span class="material-symbols-outlined">alternate_email</span>
+        </div>
+        <div class="w-10 h-10 rounded-full glass-card flex items-center justify-center text-on-surface-variant hover:text-primary cursor-pointer transition-colors hover:scale-105">
+          <span class="material-symbols-outlined">hub</span>
+        </div>
+        <div class="w-10 h-10 rounded-full glass-card flex items-center justify-center text-on-surface-variant hover:text-primary cursor-pointer transition-colors hover:scale-105">
+          <span class="material-symbols-outlined">send</span>
+        </div>
+      </div>
+      <p class="text-on-surface-variant text-xs mt-4">© 2026 RiskVision AI. Computational Intelligence for Enterprise.</p>
+    </div>
+  </footer>
+
+  <!-- Three.js Library -->
+  <script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
+
+  <!-- Legacy non-module scripts -->
+  <script src="js/shader.js"></script>
+  <script src="js/three-core.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- ES Module: Backend API Integration -->
+  <script type="module">
+    import { initSimulatorIntegration, initDashboardIntegration } from './js/simulator.js';
+
+    // Initialize after DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      initSimulatorIntegration();
+      initDashboardIntegration();
+    });
+
+    // Also hide default-insights-panel and show result when prediction-result-panel becomes visible
+    const observer = new MutationObserver(() => {
+      const resultPanel = document.getElementById('prediction-result-panel');
+      const defaultPanel = document.getElementById('default-insights-panel');
+      if (resultPanel && defaultPanel) {
+        if (!resultPanel.classList.contains('hidden')) {
+          defaultPanel.classList.add('hidden');
+        } else {
+          defaultPanel.classList.remove('hidden');
+        }
+      }
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+      const rp = document.getElementById('prediction-result-panel');
+      if (rp) observer.observe(rp, { attributes: true, attributeFilter: ['class'] });
+    });
+  </script>
+</body>
+</html>

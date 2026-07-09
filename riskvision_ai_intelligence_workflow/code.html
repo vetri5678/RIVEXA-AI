@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RiskVision AI | Intelligence Workflow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;family=Geist:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        :root {
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --glass-border-low: rgba(255, 255, 255, 0.05);
+        }
+        body {
+            background-color: #10131b;
+            color: #e0e2ed;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            backdrop-filter: blur(20px);
+            border-top: 1px solid var(--glass-border);
+            border-left: 1px solid var(--glass-border);
+            border-bottom: 1px solid var(--glass-border-low);
+            border-right: 1px solid var(--glass-border-low);
+        }
+        .aurora-bg {
+            background: radial-gradient(circle at 20% 30%, rgba(75, 142, 255, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(0, 219, 233, 0.1) 0%, transparent 50%);
+        }
+        .node-pulse {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .7; transform: scale(1.1); }
+        }
+        .flow-line {
+            stroke-dasharray: 10;
+            animation: dash 20s linear infinite;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: -1000; }
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                "on-background": "#e0e2ed",
+                "on-secondary": "#3c0090",
+                "tertiary-fixed-dim": "#00dbe9",
+                "on-tertiary-fixed": "#002022",
+                "surface-variant": "#31353d",
+                "surface-container": "#1c2028",
+                "primary-fixed": "#d8e2ff",
+                "primary-container": "#4b8eff",
+                "on-tertiary-container": "#002f33",
+                "on-secondary-fixed": "#23005b",
+                "surface-tint": "#adc6ff",
+                "primary": "#adc6ff",
+                "on-tertiary": "#00363a",
+                "inverse-primary": "#005bc1",
+                "secondary": "#d1bcff",
+                "surface-container-high": "#272a32",
+                "on-secondary-container": "#ddcdff",
+                "tertiary-container": "#00a0aa",
+                "on-primary-fixed": "#001a41",
+                "on-surface-variant": "#c1c6d7",
+                "on-primary": "#002e69",
+                "error-container": "#93000a",
+                "background": "#10131b",
+                "on-error": "#690005",
+                "primary-fixed-dim": "#adc6ff",
+                "surface-container-lowest": "#0b0e16",
+                "surface-container-low": "#181c23",
+                "on-surface": "#e0e2ed",
+                "surface-dim": "#10131b",
+                "outline-variant": "#414755",
+                "secondary-container": "#7000ff",
+                "surface": "#10131b",
+                "inverse-surface": "#e0e2ed",
+                "tertiary-fixed": "#7df4ff",
+                "secondary-fixed": "#e9ddff",
+                "secondary-fixed-dim": "#d1bcff",
+                "error": "#ffb4ab",
+                "on-error-container": "#ffdad6",
+                "surface-container-highest": "#31353d",
+                "surface-bright": "#363942",
+                "on-tertiary-fixed-variant": "#004f54",
+                "outline": "#8b90a0",
+                "tertiary": "#00dbe9",
+                "on-secondary-fixed-variant": "#5700c9",
+                "on-primary-container": "#00285c",
+                "on-primary-fixed-variant": "#004493",
+                "inverse-on-surface": "#2d3039"
+              },
+              "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+              },
+              "spacing": {
+                "margin-mobile": "20px",
+                "gutter": "24px",
+                "container-max": "1440px",
+                "margin-tablet": "32px",
+                "margin-desktop": "64px",
+                "unit": "8px"
+              },
+              "fontFamily": {
+                "display-xl": ["Geist"],
+                "display-lg": ["Geist"],
+                "body-md": ["Inter"],
+                "body-lg": ["Inter"],
+                "label-mono": ["JetBrains Mono"],
+                "headline-lg-mobile": ["Geist"],
+                "headline-lg": ["Geist"]
+              },
+              "fontSize": {
+                "display-xl": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.04em", "fontWeight": "700"}],
+                "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}],
+                "body-lg": ["18px", {"lineHeight": "28px", "letterSpacing": "0em", "fontWeight": "400"}],
+                "label-mono": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+    </script>
+</head>
+<body class="aurora-bg">
+<!-- TopNavBar -->
+<nav class="fixed top-4 left-1/2 -translate-x-1/2 w-[calc(100%-40px)] max-w-container-max rounded-full border border-white/15 bg-surface/80 backdrop-blur-xl shadow-2xl flex justify-between items-center px-8 py-4 z-50">
+<div class="flex items-center gap-3">
+<img alt="RiskVision AI" class="w-10 h-10 rounded-lg" src="https://lh3.googleusercontent.com/aida/AP1WRLvEZdCrW8dGgvpilKWCrqxPSEjYKUKVj7qu4dbgiRlF7gb45Ii1cj1gM3PC0Cx8zEudG-a2XyHeXjyidczBgYDPOZP6ykVtaLBd63Krf4qqf0emuSLiV_ZvoChNiG6v74sJgEXGb589b3XztXaqxAm9wm5j_w8GqfoYV7ObPk9Ys7xgb67AeyKPxMhQt_C8lF6rTlNGxxOSkmLJlCG8HWSSSUuX3bkY9ykjXLnV6tY7OIxcytj0hKbSw2Sm"/>
+<span class="font-display-lg text-[24px] tracking-tight text-on-surface">RiskVision AI</span>
+</div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-300" href="#">Platform</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-300" href="#">Features</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1 transition-colors duration-300" href="#">Intelligence</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-300" href="#">Pricing</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant font-medium hover:text-primary active:scale-95 transition-all">Login</button>
+<button class="bg-primary-container text-on-primary-container px-6 py-2 rounded-full font-bold active:scale-95 transition-all shadow-[0_0_20px_rgba(75,142,255,0.3)]">Get Started</button>
+</div>
+</nav>
+<main class="pt-32 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto pb-24">
+<!-- Hero Section -->
+<header class="mb-16">
+<h1 class="font-display-xl text-display-xl mb-4 text-transparent bg-clip-text bg-gradient-to-r from-on-surface to-primary">
+                Intelligence Workflow
+            </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                Experience the computational engine driving RiskVision. From raw telemetry to predictive risk synthesis, every node is optimized for enterprise-grade precision.
+            </p>
+</header>
+<!-- Workflow Visualization -->
+<section class="relative mb-24 min-h-[600px]">
+<!-- SVG Connectors Background -->
+<div class="absolute inset-0 pointer-events-none z-0">
+<svg fill="none" height="100%" viewbox="0 0 1200 600" width="100%" xmlns="http://www.w3.org/2000/svg">
+<path class="flow-line" d="M150 300C300 300 300 150 450 150" stroke="url(#gradient1)" stroke-width="2"></path>
+<path class="flow-line" d="M150 300C300 300 300 450 450 450" stroke="url(#gradient1)" stroke-width="2"></path>
+<path class="flow-line" d="M550 150C700 150 700 300 850 300" stroke="url(#gradient2)" stroke-width="2"></path>
+<path class="flow-line" d="M550 450C700 450 700 300 850 300" stroke="url(#gradient2)" stroke-width="2"></path>
+<defs>
+<lineargradient id="gradient1" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#4b8eff" stop-opacity="0"></stop>
+<stop offset="50%" stop-color="#4b8eff"></stop>
+<stop offset="100%" stop-color="#00dbe9"></stop>
+</lineargradient>
+<lineargradient id="gradient2" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#00dbe9"></stop>
+<stop offset="50%" stop-color="#d1bcff"></stop>
+<stop offset="100%" stop-color="#adc6ff" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+</svg>
+</div>
+<!-- Pipeline Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-12 relative z-10">
+<!-- Step 1: Data Ingestion -->
+<div class="flex flex-col gap-6">
+<div class="glass-card p-8 rounded-[22px] bg-surface-container/40 hover:shadow-[0_0_40px_rgba(75,142,255,0.15)] transition-all group">
+<div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl">cloud_sync</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg mb-2">Data Ingestion</h3>
+<p class="text-on-surface-variant font-body-md mb-6">Real-time telemetry syncing from distributed enterprise endpoints.</p>
+<div class="space-y-3">
+<div class="flex justify-between items-center text-label-mono font-label-mono bg-background/50 p-2 rounded-lg">
+<span class="text-primary">HTTP/2 PUSH</span>
+<span class="text-on-surface">ACTIVE</span>
+</div>
+<div class="flex justify-between items-center text-label-mono font-label-mono bg-background/50 p-2 rounded-lg">
+<span class="text-primary">Kafka Stream</span>
+<span class="text-on-surface">9.4 GB/s</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 2: ML Inference -->
+<div class="flex flex-col gap-6 md:mt-24">
+<div class="glass-card p-8 rounded-[22px] bg-surface-container/60 border-primary/30 shadow-[0_0_30px_rgba(0,219,233,0.1)] group">
+<div class="w-12 h-12 rounded-xl bg-tertiary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-tertiary text-3xl">psychology</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg mb-2">ML Inference</h3>
+<p class="text-on-surface-variant font-body-md mb-6">Parallel processing across ensemble model architectures.</p>
+<div class="grid grid-cols-2 gap-3">
+<div class="p-3 bg-background/40 rounded-xl border border-white/5">
+<span class="block text-label-mono text-tertiary mb-1">XGBoost</span>
+<span class="text-[20px] font-bold text-on-surface">99.2%</span>
+</div>
+<div class="p-3 bg-background/40 rounded-xl border border-white/5">
+<span class="block text-label-mono text-tertiary mb-1">Random Forest</span>
+<span class="text-[20px] font-bold text-on-surface">98.7%</span>
+</div>
+</div>
+<!-- Animated Analyzing State -->
+<div class="mt-6 pt-6 border-t border-white/10">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-2 h-2 rounded-full bg-tertiary node-pulse"></div>
+<span class="text-label-mono text-on-surface-variant uppercase tracking-widest">Neural Sync</span>
+</div>
+<div class="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-2/3 animate-[progress_2s_ease-in-out_infinite]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 3: Risk Synthesis -->
+<div class="flex flex-col gap-6 md:mt-48">
+<div class="glass-card p-8 rounded-[22px] bg-surface-container/40 hover:shadow-[0_0_40px_rgba(209,188,255,0.15)] transition-all group">
+<div class="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-secondary text-3xl">query_stats</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg mb-2">Risk Synthesis</h3>
+<p class="text-on-surface-variant font-body-md mb-6">Final evaluation of threat vectors and prioritized mitigation strategies.</p>
+<div class="flex items-center gap-4 p-4 bg-error-container/20 rounded-xl border border-error/20">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">warning</span>
+<div>
+<div class="text-label-mono text-error font-bold uppercase">Critical Vector</div>
+<div class="text-on-surface text-body-md">Endpoint B-092 Compromised</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Technical Deep Dive: Bento Grid -->
+<section class="mb-24">
+<div class="flex justify-between items-end mb-12">
+<div>
+<h2 class="font-headline-lg text-headline-lg mb-2">Deep Learning Architecture</h2>
+<p class="text-on-surface-variant font-body-md">Granular performance metrics for predictive reliability.</p>
+</div>
+<button class="text-primary font-bold flex items-center gap-2 hover:gap-3 transition-all">
+                    View Model Specs <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 grid-rows-2 gap-gutter">
+<!-- Large Stats Card -->
+<div class="md:col-span-8 glass-card p-10 rounded-[32px] bg-surface-container-low overflow-hidden relative group">
+<div class="absolute top-0 right-0 p-8">
+<span class="material-symbols-outlined text-primary/20 text-9xl">analytics</span>
+</div>
+<div class="relative z-10">
+<span class="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-label-mono mb-6">TRAINING DYNAMICS</span>
+<h3 class="text-display-lg font-display-lg mb-8 leading-tight">XGBoost Ensemble<br/>Optimized for Latency</h3>
+<div class="grid grid-cols-3 gap-8 max-w-xl">
+<div>
+<span class="block text-on-surface-variant font-body-md mb-1">Epoch Accuracy</span>
+<span class="text-[32px] font-bold text-on-surface">99.82%</span>
+</div>
+<div>
+<span class="block text-on-surface-variant font-body-md mb-1">Loss Function</span>
+<span class="text-[32px] font-bold text-on-surface">0.004</span>
+</div>
+<div>
+<span class="block text-on-surface-variant font-body-md mb-1">Compute Time</span>
+<span class="text-[32px] font-bold text-on-surface">14ms</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Small Grid Card 1 -->
+<div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-surface-container-high flex flex-col justify-between">
+<span class="material-symbols-outlined text-tertiary text-4xl">hub</span>
+<div>
+<h4 class="text-[20px] font-bold mb-2">Node Distribution</h4>
+<p class="text-on-surface-variant text-body-md mb-4">Heterogeneous data sources mapped across 24 edge nodes.</p>
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-primary"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-tertiary"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-secondary"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface flex items-center justify-center bg-surface-variant text-[10px] text-white">+12</div>
+</div>
+</div>
+</div>
+<!-- Small Grid Card 2 -->
+<div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-surface-container-high flex flex-col justify-between">
+<span class="material-symbols-outlined text-secondary text-4xl">security</span>
+<div>
+<h4 class="text-[20px] font-bold mb-2">Encrypted Telemetry</h4>
+<p class="text-on-surface-variant text-body-md">AES-256 GCM encryption active at rest and in transit.</p>
+</div>
+</div>
+<!-- Small Grid Card 3 -->
+<div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-surface-container-high flex flex-col justify-between relative overflow-hidden">
+<div class="absolute bottom-0 left-0 w-full h-1/2 opacity-20">
+<svg class="w-full h-full" viewbox="0 0 100 40">
+<path class="text-tertiary" d="M0 40 Q 10 10 20 30 T 40 20 T 60 35 T 80 15 T 100 30" fill="none" stroke="currentColor" stroke-width="2"></path>
+</svg>
+</div>
+<div class="relative z-10">
+<span class="material-symbols-outlined text-on-surface-variant text-4xl">speed</span>
+<h4 class="text-[20px] font-bold mt-4 mb-2">Inference Velocity</h4>
+<p class="text-on-surface-variant text-body-md">Sub-millisecond decision cycles for rapid response.</p>
+</div>
+</div>
+<!-- Small Grid Card 4 -->
+<div class="md:col-span-4 glass-card p-8 rounded-[32px] bg-primary-container text-on-primary-container">
+<div class="flex flex-col h-full justify-between">
+<h4 class="text-[24px] font-bold leading-tight">Ready to integrate?</h4>
+<p class="text-on-primary-container/80 text-body-md mb-6">Join 400+ enterprises running RiskVision.</p>
+<button class="w-full bg-white text-on-primary-fixed font-bold py-3 rounded-2xl active:scale-95 transition-all">
+                            Request Demo
+                        </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Tech Stack Grid -->
+<section class="border-t border-white/5 pt-24">
+<div class="text-center mb-12">
+<h3 class="text-label-mono font-label-mono text-on-surface-variant uppercase tracking-[0.2em] mb-4">THE TECH STACK</h3>
+<div class="flex flex-wrap justify-center gap-12 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-700">
+<div class="flex items-center gap-2 font-display-lg text-[24px]">
+<span class="material-symbols-outlined">database</span> Redshift
+                    </div>
+<div class="flex items-center gap-2 font-display-lg text-[24px]">
+<span class="material-symbols-outlined">memory</span> PyTorch
+                    </div>
+<div class="flex items-center gap-2 font-display-lg text-[24px]">
+<span class="material-symbols-outlined">developer_board</span> CUDA
+                    </div>
+<div class="flex items-center gap-2 font-display-lg text-[24px]">
+<span class="material-symbols-outlined">cloud</span> AWS Sagemaker
+                    </div>
+<div class="flex items-center gap-2 font-display-lg text-[24px]">
+<span class="material-symbols-outlined">dynamic_form</span> Apache Spark
+                    </div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full rounded-t-[40px] border-t border-white/10 bg-surface-container/60 backdrop-blur-2xl flex flex-col md:flex-row justify-between items-center px-margin-desktop py-12 w-full">
+<div class="flex flex-col gap-4 mb-8 md:mb-0">
+<div class="flex items-center gap-3">
+<img alt="RiskVision AI" class="w-8 h-8 opacity-70" src="https://lh3.googleusercontent.com/aida/AP1WRLvEZdCrW8dGgvpilKWCrqxPSEjYKUKVj7qu4dbgiRlF7gb45Ii1cj1gM3PC0Cx8zEudG-a2XyHeXjyidczBgYDPOZP6ykVtaLBd63Krf4qqf0emuSLiV_ZvoChNiG6v74sJgEXGb589b3XztXaqxAm9wm5j_w8GqfoYV7ObPk9Ys7xgb67AeyKPxMhQt_C8lF6rTlNGxxOSkmLJlCG8HWSSSUuX3bkY9ykjXLnV6tY7OIxcytj0hKbSw2Sm"/>
+<span class="font-display-lg text-[20px] text-on-surface">RiskVision AI</span>
+</div>
+<p class="text-on-surface-variant font-body-md max-w-sm">© 2024 RiskVision AI. Computational Intelligence for Enterprise.</p>
+</div>
+<div class="flex gap-8 text-on-surface-variant">
+<a class="hover:text-on-surface transition-colors font-body-md" href="#">Privacy Policy</a>
+<a class="hover:text-on-surface transition-colors font-body-md" href="#">Terms of Service</a>
+<a class="hover:text-on-surface transition-colors font-body-md" href="#">Security</a>
+<a class="hover:text-on-surface transition-colors font-body-md" href="#">Status</a>
+</div>
+</footer>
+<!-- CSS Keyframes for Progress Animation -->
+<style>
+        @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+        }
+    </style>
+<script>
+        // Simple micro-interaction for the workflow cards
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+</body></html>

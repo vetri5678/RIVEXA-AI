@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RiskVision AI | Executive Analytics Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&amp;family=Geist:wght@600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        :root {
+            --bg-deep: #050816;
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --neon-blue: #adc6ff;
+            --neon-cyan: #00dbe9;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: #e0e2ed;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .aurora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(75, 142, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(112, 0, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(0, 219, 233, 0.05) 0%, transparent 70%);
+            filter: blur(80px);
+        }
+
+        .glass-panel {
+            background: rgba(28, 32, 40, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-card-hover:hover {
+            border-color: rgba(173, 198, 255, 0.4);
+            box-shadow: 0 0 30px rgba(173, 198, 255, 0.1);
+            transform: translateY(-2px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .neon-glow-primary {
+            box-shadow: 0 0 15px rgba(173, 198, 255, 0.3);
+        }
+
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(0, 219, 233, 0.5), transparent);
+            position: absolute;
+            top: -2px;
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            5% { opacity: 1; }
+            95% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+
+        .chart-bar {
+            transform-origin: bottom;
+            animation: grow-up 1.5s ease-out forwards;
+        }
+
+        @keyframes grow-up {
+            from { transform: scaleY(0); }
+            to { transform: scaleY(1); }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-background": "#e0e2ed",
+                        "on-secondary": "#3c0090",
+                        "tertiary-fixed-dim": "#00dbe9",
+                        "surface-variant": "#31353d",
+                        "surface-container": "#1c2028",
+                        "primary-container": "#4b8eff",
+                        "primary": "#adc6ff",
+                        "on-surface": "#e0e2ed",
+                        "background": "#050816",
+                        "surface": "#10131b",
+                        "on-surface-variant": "#c1c6d7",
+                        "tertiary": "#00dbe9"
+                    },
+                    fontFamily: {
+                        "display-lg": ["Geist"],
+                        "body-md": ["Inter"],
+                        "label-mono": ["JetBrains Mono"]
+                    },
+                    spacing: {
+                        "margin-desktop": "64px",
+                        "container-max": "1440px"
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="dark">
+<div class="aurora-bg"></div>
+<!-- TopNavBar -->
+<nav class="fixed top-4 left-1/2 -translate-x-1/2 w-[calc(100%-40px)] max-w-container-max rounded-full border border-white/15 backdrop-blur-xl bg-surface/80 shadow-[0_0_30px_rgba(173,198,255,0.15)] z-50 flex justify-between items-center px-8 py-4">
+<div class="flex items-center gap-3">
+<img alt="RiskVision AI Logo" class="w-8 h-8 rounded-lg" src="https://lh3.googleusercontent.com/aida/AP1WRLvEZdCrW8dGgvpilKWCrqxPSEjYKUKVj7qu4dbgiRlF7gb45Ii1cj1gM3PC0Cx8zEudG-a2XyHeXjyidczBgYDPOZP6ykVtaLBd63Krf4qqf0emuSLiV_ZvoChNiG6v74sJgEXGb589b3XztXaqxAm9wm5j_w8GqfoYV7ObPk9Ys7xgb67AeyKPxMhQt_C8lF6rTlNGxxOSkmLJlCG8HWSSSUuX3bkY9ykjXLnV6tY7OIxcytj0hKbSw2Sm"/>
+<span class="font-display-lg text-[24px] tracking-tight text-on-surface">RiskVision AI</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-body-md" href="#">Platform</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-300 font-body-md" href="#">Features</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-300 font-body-md" href="#">Intelligence</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-300 font-body-md" href="#">Pricing</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant font-medium px-4 py-2 hover:text-on-surface transition-colors">Login</button>
+<button class="bg-primary-container text-on-primary-container px-6 py-2 rounded-full font-bold active:scale-95 transition-transform shadow-lg neon-glow-primary">Get Started</button>
+</div>
+</nav>
+<main class="pt-32 pb-20 px-margin-desktop max-w-container-max mx-auto">
+<!-- Header -->
+<header class="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="font-label-mono text-[12px] uppercase tracking-widest text-tertiary">System Online: Live Intelligence Feed</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-on-surface">Executive Dashboard</h1>
+<p class="text-on-surface-variant font-body-md mt-2 max-w-xl">Comprehensive risk analysis and computational insights for enterprise-level decision making.</p>
+</div>
+<div class="flex gap-4">
+<div class="glass-panel px-4 py-2 rounded-xl flex items-center gap-3 border-white/10">
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+<span class="font-label-mono text-[14px]">Q4 FY2024</span>
+</div>
+<button class="glass-panel px-6 py-2 rounded-xl flex items-center gap-2 border-white/10 hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined">download</span>
+<span class="font-body-md">Export PDF</span>
+</button>
+</div>
+</header>
+<!-- Bento Grid Content -->
+<div class="grid grid-cols-12 gap-6">
+<!-- KPI Section -->
+<div class="col-span-12 md:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
+<!-- Total Projects -->
+<div class="glass-panel p-6 rounded-[22px] glass-card-hover relative overflow-hidden group">
+<div class="scanline"></div>
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined p-2 rounded-lg bg-primary/10 text-primary">folder_managed</span>
+<span class="text-xs text-green-400 font-label-mono">+12.5%</span>
+</div>
+<h3 class="text-on-surface-variant font-body-md mb-1">Total Projects</h3>
+<p class="text-4xl font-display-lg text-on-surface">1,284</p>
+</div>
+<!-- High Risk -->
+<div class="glass-panel p-6 rounded-[22px] glass-card-hover relative overflow-hidden group border-red-500/30">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined p-2 rounded-lg bg-red-500/10 text-red-400">warning</span>
+<span class="text-xs text-red-400 font-label-mono">-2.4%</span>
+</div>
+<h3 class="text-on-surface-variant font-body-md mb-1">High Risk Units</h3>
+<p class="text-4xl font-display-lg text-on-surface">42</p>
+</div>
+<!-- Model Accuracy -->
+<div class="glass-panel p-6 rounded-[22px] glass-card-hover relative overflow-hidden group border-tertiary/30">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined p-2 rounded-lg bg-tertiary/10 text-tertiary">psychology</span>
+<span class="text-xs text-tertiary font-label-mono">Optimized</span>
+</div>
+<h3 class="text-on-surface-variant font-body-md mb-1">Model Accuracy</h3>
+<p class="text-4xl font-display-lg text-on-surface">99.8<span class="text-xl">%</span></p>
+</div>
+<!-- Risk Trend Line Chart -->
+<div class="col-span-12 glass-panel p-8 rounded-[22px] glass-card-hover min-h-[400px] flex flex-col">
+<div class="flex justify-between items-center mb-8">
+<div>
+<h3 class="font-headline-lg text-on-surface">Risk Mitigation Trends</h3>
+<p class="text-on-surface-variant text-sm">Real-time vector tracking of organizational vulnerability</p>
+</div>
+<div class="flex gap-2">
+<span class="flex items-center gap-1.5 text-xs font-label-mono text-primary">
+<span class="w-2 h-2 rounded-full bg-primary"></span> Predicted
+                            </span>
+<span class="flex items-center gap-1.5 text-xs font-label-mono text-tertiary">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span> Actual
+                            </span>
+</div>
+</div>
+<div class="flex-grow relative flex items-end justify-between gap-4 h-full pt-10">
+<!-- Simulated Chart Path -->
+<div class="absolute inset-0 flex items-center justify-center opacity-20">
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 800 200">
+<path class="text-primary" d="M0,150 Q100,50 200,100 T400,80 T600,120 T800,40" fill="none" stroke="currentColor" stroke-width="2"></path>
+<path class="text-tertiary" d="M0,180 Q100,120 200,150 T400,100 T600,140 T800,80" fill="none" stroke="currentColor" stroke-width="2"></path>
+</svg>
+</div>
+<!-- Simple Bars to represent data points for the aesthetic -->
+<div class="w-full h-full flex items-end justify-between px-4 z-10">
+<div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 40%"></div>
+<div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 65%; animation-delay: 0.1s"></div>
+<div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 45%; animation-delay: 0.2s"></div>
+<div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 80%; animation-delay: 0.3s"></div>
+<div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 60%; animation-delay: 0.4s"></div>
+<div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 90%; animation-delay: 0.5s"></div>
+<div class="w-2 bg-primary/20 rounded-t-full chart-bar" style="height: 70%; animation-delay: 0.6s"></div>
+</div>
+</div>
+<div class="flex justify-between mt-4 text-[10px] font-label-mono text-on-surface-variant uppercase tracking-widest">
+<span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span>
+</div>
+</div>
+<!-- Budget vs Risk Distribution (Bar Chart) -->
+<div class="col-span-12 md:col-span-7 glass-panel p-6 rounded-[22px] glass-card-hover">
+<h3 class="font-body-lg font-bold text-on-surface mb-6">Budget Allocation vs. Risk Factor</h3>
+<div class="space-y-6">
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-label-mono text-on-surface-variant">
+<span>CYBER SECURITY</span>
+<span>88% Efficiency</span>
+</div>
+<div class="h-3 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-tertiary w-[88%] rounded-full shadow-[0_0_10px_rgba(173,198,255,0.4)]"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-label-mono text-on-surface-variant">
+<span>INFRASTRUCTURE</span>
+<span>64% Efficiency</span>
+</div>
+<div class="h-3 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-tertiary w-[64%] rounded-full shadow-[0_0_10px_rgba(173,198,255,0.4)]"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-label-mono text-on-surface-variant">
+<span>OPERATIONAL AI</span>
+<span>92% Efficiency</span>
+</div>
+<div class="h-3 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-tertiary w-[92%] rounded-full shadow-[0_0_10px_rgba(173,198,255,0.4)]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Risk Radar Vector -->
+<div class="col-span-12 md:col-span-5 glass-panel p-6 rounded-[22px] glass-card-hover flex flex-col items-center justify-center relative overflow-hidden">
+<div class="absolute inset-0 pointer-events-none opacity-10">
+<svg class="w-full h-full" viewbox="0 0 200 200">
+<circle cx="100" cy="100" fill="none" r="80" stroke="white" stroke-dasharray="2 4"></circle>
+<circle cx="100" cy="100" fill="none" r="50" stroke="white" stroke-dasharray="2 4"></circle>
+<line stroke="white" stroke-dasharray="2 4" x1="100" x2="100" y1="20" y2="180"></line>
+<line stroke="white" stroke-dasharray="2 4" x1="20" x2="180" y1="100" y2="100"></line>
+</svg>
+</div>
+<h3 class="font-body-lg font-bold text-on-surface mb-2 self-start">Threat Vectors</h3>
+<div class="relative w-40 h-40 flex items-center justify-center mt-4">
+<svg class="w-full h-full -rotate-90" viewbox="0 0 100 100">
+<polygon fill="rgba(173,198,255,0.2)" points="50,10 80,40 70,80 30,80 20,40" stroke="#adc6ff" stroke-width="2"></polygon>
+<circle cx="50" cy="10" fill="#adc6ff" r="2"></circle>
+<circle cx="80" cy="40" fill="#adc6ff" r="2"></circle>
+<circle cx="70" cy="80" fill="#adc6ff" r="2"></circle>
+<circle cx="30" cy="80" fill="#adc6ff" r="2"></circle>
+<circle cx="20" cy="40" fill="#adc6ff" r="2"></circle>
+</svg>
+<div class="absolute text-[8px] font-label-mono text-tertiary -top-4">VELOCITY</div>
+<div class="absolute text-[8px] font-label-mono text-tertiary -right-10 top-1/2">IMPACT</div>
+<div class="absolute text-[8px] font-label-mono text-tertiary -left-10 top-1/2">LATENCY</div>
+</div>
+<p class="text-xs text-on-surface-variant mt-8 text-center">Multi-dimensional risk scoring active.</p>
+</div>
+</div>
+<!-- Sidebar: Recent Analyses -->
+<aside class="col-span-12 md:col-span-4 flex flex-col gap-6">
+<div class="glass-panel rounded-[22px] p-6 flex flex-col h-full">
+<div class="flex items-center justify-between mb-8">
+<h3 class="font-headline-lg text-on-surface">Recent Analyses</h3>
+<span class="material-symbols-outlined text-on-surface-variant">more_vert</span>
+</div>
+<div class="space-y-6">
+<!-- Activity 1 -->
+<div class="group cursor-pointer">
+<div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all">
+<div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-green-400">check_circle</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center">
+<h4 class="font-body-md font-bold text-on-surface">Project Helios</h4>
+<span class="text-[10px] font-label-mono text-on-surface-variant">2m ago</span>
+</div>
+<p class="text-sm text-on-surface-variant">Security Audit completed. Risk Score: 12/100</p>
+<div class="mt-2 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-surface-variant text-on-surface-variant uppercase">Infrastructure</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-green-500/20 text-green-400 uppercase">Passed</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Activity 2 -->
+<div class="group cursor-pointer">
+<div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all">
+<div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-red-400">error</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center">
+<h4 class="font-body-md font-bold text-on-surface">Mainframe Core</h4>
+<span class="text-[10px] font-label-mono text-on-surface-variant">45m ago</span>
+</div>
+<p class="text-sm text-on-surface-variant">Anomaly detected in latency patterns. Immediate action required.</p>
+<div class="mt-2 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-surface-variant text-on-surface-variant uppercase">Network</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-red-500/20 text-red-400 uppercase">Critical</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Activity 3 -->
+<div class="group cursor-pointer">
+<div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all">
+<div class="w-10 h-10 rounded-lg bg-tertiary/10 flex items-center justify-center shrink-0">
+<div class="w-4 h-4 border-2 border-tertiary border-t-transparent rounded-full animate-spin"></div>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center">
+<h4 class="font-body-md font-bold text-on-surface">Cloud Synthesis</h4>
+<span class="text-[10px] font-label-mono text-on-surface-variant">Processing</span>
+</div>
+<p class="text-sm text-on-surface-variant">Aggregating Q4 performance logs across 12 nodes...</p>
+<div class="mt-3 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-3/4 rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Activity 4 -->
+<div class="group cursor-pointer">
+<div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">analytics</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center">
+<h4 class="font-body-md font-bold text-on-surface">Data Vault A1</h4>
+<span class="text-[10px] font-label-mono text-on-surface-variant">3h ago</span>
+</div>
+<p class="text-sm text-on-surface-variant">Regular maintenance diagnostic complete.</p>
+<div class="mt-2 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-surface-variant text-on-surface-variant uppercase">Storage</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-mono bg-primary/20 text-primary uppercase">Stable</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-auto pt-8">
+<button class="w-full py-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 transition-colors font-body-md font-bold flex items-center justify-center gap-2">
+                            View All Analyses
+                            <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full rounded-t-[40px] border-t border-white/10 bg-surface-container/60 backdrop-blur-2xl px-margin-desktop py-12 flex flex-col md:flex-row justify-between items-center gap-8">
+<div class="flex flex-col gap-4 items-center md:items-start">
+<div class="flex items-center gap-3">
+<img alt="RiskVision AI" class="w-6 h-6 rounded" src="https://lh3.googleusercontent.com/aida/AP1WRLvEZdCrW8dGgvpilKWCrqxPSEjYKUKVj7qu4dbgiRlF7gb45Ii1cj1gM3PC0Cx8zEudG-a2XyHeXjyidczBgYDPOZP6ykVtaLBd63Krf4qqf0emuSLiV_ZvoChNiG6v74sJgEXGb589b3XztXaqxAm9wm5j_w8GqfoYV7ObPk9Ys7xgb67AeyKPxMhQt_C8lF6rTlNGxxOSkmLJlCG8HWSSSUuX3bkY9ykjXLnV6tY7OIxcytj0hKbSw2Sm"/>
+<span class="font-display-lg text-xl text-on-surface">RiskVision AI</span>
+</div>
+<p class="text-on-surface-variant font-body-md text-sm text-center md:text-left">© 2024 RiskVision AI. Computational Intelligence for Enterprise.</p>
+</div>
+<div class="flex gap-8">
+<a class="text-on-surface-variant font-body-md hover:text-on-surface transition-colors" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant font-body-md hover:text-on-surface transition-colors" href="#">Terms of Service</a>
+<a class="text-on-surface-variant font-body-md hover:text-on-surface transition-colors" href="#">Security</a>
+<a class="text-on-surface-variant font-body-md hover:text-on-surface transition-colors" href="#">Status</a>
+</div>
+</footer>
+<script>
+        // Micro-interactions for glass cards
+        document.querySelectorAll('.glass-card-hover').forEach(card => {
+            card.addEventListener('mousemove', e => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+
+        // Initialize any real-time logic simulation
+        console.log("RiskVision AI Intelligence Layer Active...");
+    </script>
+</body></html>

@@ -1,0 +1,154 @@
+# ===========================================================================
+# RiskVision AI — Pipeline Configuration
+# ===========================================================================
+# Master configuration file for the Software Project Graveyard Analyzer.
+# Every pipeline stage reads its parameters from here.
+# ===========================================================================
+
+pipeline:
+  name: "riskvision_graveyard_analyzer"
+  version: "1.0.0"
+  random_seed: 42
+
+# ---------------------------------------------------------------------------
+# Stage 1: Data Loader
+# ---------------------------------------------------------------------------
+data_loader:
+  supported_formats:
+    - csv
+    - xlsx
+    - json
+  required_columns:
+    - project_id
+    - project_name
+    - budget
+    - actual_cost
+    - timeline_months
+    - actual_duration
+    - team_size
+    - status
+  merge_strategy: "concat"       # concat | join
+  join_key: "project_id"
+
+# ---------------------------------------------------------------------------
+# Stage 2: Data Inspector
+# ---------------------------------------------------------------------------
+data_inspector:
+  outlier_method: "iqr"           # iqr | zscore
+  outlier_threshold: 1.5
+  missing_threshold_pct: 50      # drop column if > 50% missing
+
+# ---------------------------------------------------------------------------
+# Stage 3: Data Cleaner
+# ---------------------------------------------------------------------------
+data_cleaner:
+  missing_strategy: "median"      # mean | median | mode | drop
+  duplicate_subset: null           # null = all columns
+  date_format: "%Y-%m-%d"
+  category_mapping_file: "config/category_mappings.json"
+
+# ---------------------------------------------------------------------------
+# Stage 4: Data Transformer
+# ---------------------------------------------------------------------------
+data_transformer:
+  encoding_strategy: "label"      # onehot | label | target
+  scaling_strategy: "standard"    # standard | minmax | robust
+  target_column: "project_failed" # excluded from encoding/scaling
+  text_columns:
+    - status
+    - risk_category
+
+# ---------------------------------------------------------------------------
+# Stage 5: Feature Engineering
+# ---------------------------------------------------------------------------
+feature_engineering:
+  enabled_features:
+    - delay_ratio
+    - cost_overrun_ratio
+    - requirement_change_rate
+    - budget_utilization
+    - team_productivity
+    - schedule_efficiency
+    - risk_density
+    - project_complexity_score
+
+# ---------------------------------------------------------------------------
+# Stage 6: Data Validator
+# ---------------------------------------------------------------------------
+data_validator:
+  expected_feature_count: null     # auto-detect from transformer output
+  allowed_dtypes:
+    - float64
+    - float32
+    - int64
+    - int32
+    - uint8
+  max_null_tolerance: 0
+
+# ---------------------------------------------------------------------------
+# Stage 7: Dataset Splitter
+# ---------------------------------------------------------------------------
+dataset_splitter:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  stratify_column: "project_failed"
+  shuffle: true
+
+# ---------------------------------------------------------------------------
+# Stage 8: Model Trainer
+# ---------------------------------------------------------------------------
+model_trainer:
+  algorithms:
+    - name: "random_forest"
+      params:
+        n_estimators: 200
+        max_depth: 12
+        random_state: 42
+    - name: "xgboost"
+      params:
+        n_estimators: 300
+        learning_rate: 0.05
+        max_depth: 8
+        random_state: 42
+    - name: "gradient_boosting"
+      params:
+        n_estimators: 200
+        learning_rate: 0.1
+        random_state: 42
+    - name: "logistic_regression"
+      params:
+        max_iter: 1000
+        C: 1.0
+        random_state: 42
+  selection_metric: "f1"          # accuracy | precision | recall | f1 | roc_auc
+  cross_validation_folds: 5
+
+# ---------------------------------------------------------------------------
+# Stage 9: Model Evaluator
+# ---------------------------------------------------------------------------
+model_evaluator:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1
+    - roc_auc
+  generate_confusion_matrix: true
+  cross_validation_folds: 5
+
+# ---------------------------------------------------------------------------
+# Stage 11: Explainability Engine
+# ---------------------------------------------------------------------------
+explainability:
+  shap_method: "tree"             # tree | kernel | linear
+  top_features: 10
+  generate_waterfall: true
+
+# ---------------------------------------------------------------------------
+# Stage 12: Risk Report Generator
+# ---------------------------------------------------------------------------
+report_generator:
+  output_format: "json"           # json | html | pdf
+  include_timestamp: true
+  include_confidence: true
