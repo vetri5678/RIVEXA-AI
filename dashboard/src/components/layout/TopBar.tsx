@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Bell, Shield, Cpu, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Search, Bell, Shield, RefreshCw } from 'lucide-react';
 import { useAlerts, useRetrainMutation } from '../../hooks/useDashboard';
-import Badge from '../common/Badge';
 
 interface TopBarProps {
   onSearchChange: (val: string) => void;

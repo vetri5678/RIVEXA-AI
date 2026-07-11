@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     """Centralized application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", str(BASE_DIR / ".env"), str(BASE_DIR.parent / ".env")),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -88,6 +88,12 @@ class Settings(BaseSettings):
     # Default admin bootstrap
     bootstrap_admin_email: str = Field(default="admin@riskvision.ai", alias="BOOTSTRAP_ADMIN_EMAIL")
     bootstrap_admin_password: str = Field(default="Admin@123456", alias="BOOTSTRAP_ADMIN_PASSWORD")
+
+    # Centralized Networking
+    port: int = Field(default=5000, alias="PORT")
+    backend_url: str = Field(default="http://localhost:8080/api/v1", alias="BACKEND_URL")
+    llm_url: str = Field(default="http://localhost:5001/api/v1", alias="LLM_URL")
+
 
     @field_validator("cors_origins", mode="before")
     @classmethod

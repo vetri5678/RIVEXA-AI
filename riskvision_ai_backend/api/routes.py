@@ -273,15 +273,20 @@ state = PipelineState()
 @router.get("/pipeline/status", response_model=StatusResponse)
 def get_status():
     """Retrieve status metadata of the loaded pipeline and model."""
-    return StatusResponse(
-        status="READY" if state.best_model else "UNTRAINED",
-        pipeline_name=state.config.name,
-        pipeline_version=state.config.version,
-        loaded_model=state.last_model_name,
-        has_transformers=state.transformer_artifacts is not None,
-        model_count=state.get_model_count(),
-        reports_count=state.get_reports_count(),
-    )
+    try:
+        logger.debug("Querying pipeline status (/api/v1/pipeline/status)")
+        return StatusResponse(
+            status="READY" if state.best_model else "UNTRAINED",
+            pipeline_name=state.config.name,
+            pipeline_version=state.config.version,
+            loaded_model=state.last_model_name,
+            has_transformers=state.transformer_artifacts is not None,
+            model_count=state.get_model_count(),
+            reports_count=state.get_reports_count(),
+        )
+    except Exception as exc:
+        logger.error("Error fetching pipeline status: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve pipeline status: {exc}")
 
 
 @router.post("/pipeline/train", response_model=TrainingResponse)
@@ -561,31 +566,36 @@ def get_pipeline_metrics():
     Return high-level pipeline health and model performance metrics.
     Aggregates status, last model grade, and activity counts.
     """
-    model_grade = None
-    accuracy = None
-    f1_score = None
-    roc_auc = None
+    try:
+        logger.debug("Querying pipeline metrics (/api/v1/pipeline/metrics)")
+        model_grade = None
+        accuracy = None
+        f1_score = None
+        roc_auc = None
 
-    if state.last_evaluation_summary:
-        ev = state.last_evaluation_summary
-        model_grade = ev.overall_grade
-        metrics = ev.metrics if isinstance(ev.metrics, dict) else {}
-        accuracy = metrics.get("accuracy")
-        f1_score = metrics.get("f1")
-        roc_auc = metrics.get("roc_auc")
+        if state.last_evaluation_summary:
+            ev = state.last_evaluation_summary
+            model_grade = ev.overall_grade
+            metrics = ev.metrics if isinstance(ev.metrics, dict) else {}
+            accuracy = metrics.get("accuracy")
+            f1_score = metrics.get("f1")
+            roc_auc = metrics.get("roc_auc")
 
-    return PipelineMetricsResponse(
-        status="READY" if state.best_model else "UNTRAINED",
-        loaded_model=state.last_model_name,
-        model_grade=model_grade,
-        accuracy=accuracy,
-        f1_score=f1_score,
-        roc_auc=roc_auc,
-        total_reports=state.get_reports_count(),
-        total_models=state.get_model_count(),
-        pipeline_name=state.config.name,
-        pipeline_version=state.config.version,
-    )
+        return PipelineMetricsResponse(
+            status="READY" if state.best_model else "UNTRAINED",
+            loaded_model=state.last_model_name,
+            model_grade=model_grade,
+            accuracy=accuracy,
+            f1_score=f1_score,
+            roc_auc=roc_auc,
+            total_reports=state.get_reports_count(),
+            total_models=state.get_model_count(),
+            pipeline_name=state.config.name,
+            pipeline_version=state.config.version,
+        )
+    except Exception as exc:
+        logger.error("Error fetching pipeline metrics: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve pipeline metrics: {exc}")
 
 
 @router.post("/pipeline/train/upload")

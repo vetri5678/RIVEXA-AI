@@ -180,11 +180,11 @@ class PipelineMetricsResponse(BaseModel):
     Aggregated pipeline health and model performance metrics.
     """
     status: str
-    loaded_model: Optional[str]
-    model_grade: Optional[str]
-    accuracy: Optional[float]
-    f1_score: Optional[float]
-    roc_auc: Optional[float]
+    loaded_model: Optional[str] = None
+    model_grade: Optional[str] = None
+    accuracy: Optional[float] = None
+    f1_score: Optional[float] = None
+    roc_auc: Optional[float] = None
     total_reports: int
     total_models: int
     pipeline_name: str

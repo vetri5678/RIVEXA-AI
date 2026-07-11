@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, ShieldAlert, Cpu, BrainCircuit, Activity, FileDown, LogOut } from 'lucide-react';
+import { LayoutDashboard, Cpu, BrainCircuit, Activity, LogOut, GitBranch } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 interface SidebarProps {
@@ -11,6 +11,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
 
   const menuItems = [
     { name: 'AI Command Center', icon: LayoutDashboard, path: '/' },
+    { name: 'Repository Nodes', icon: GitBranch, path: '/repositories' },
     { name: 'Telemetry Stream', icon: Activity, path: '/telemetry' },
     { name: 'System Core', icon: Cpu, path: '/system' },
   ];

@@ -15,11 +15,7 @@ export const Login: React.FC = () => {
     setError('');
 
     try {
-      const credentials = new URLSearchParams();
-      credentials.append('username', email); // OAuth2 expects username
-      credentials.append('password', password);
-
-      const res = await authApi.login(credentials);
+      const res = await authApi.login({ email, password });
       localStorage.setItem('rv_access_token', res.access_token);
       localStorage.setItem('rv_refresh_token', res.refresh_token);
 
@@ -29,7 +25,14 @@ export const Login: React.FC = () => {
 
       window.location.hash = '#/';
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Invalid administrative credentials.');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map((d: any) => `${d.loc.join('.')}: ${d.msg}`).join(', '));
+      } else if (typeof detail === 'string') {
+        setError(detail);
+      } else {
+        setError('Invalid administrative credentials.');
+      }
     } finally {
       setLoading(false);
     }

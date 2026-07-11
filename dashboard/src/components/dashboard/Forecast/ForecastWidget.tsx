@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useForecast } from '../../../hooks/useDashboard';
 import WidgetWrapper from '../Common/WidgetWrapper';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 export const ForecastWidget: React.FC = () => {
   const [horizon, setHorizon] = useState<'7' | '30' | '90'>('30');

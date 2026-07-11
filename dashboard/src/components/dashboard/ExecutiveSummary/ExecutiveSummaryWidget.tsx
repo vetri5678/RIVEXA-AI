@@ -1,7 +1,7 @@
 import React from 'react';
 import { useExecutiveSummary } from '../../../hooks/useDashboard';
 import WidgetWrapper from '../Common/WidgetWrapper';
-import { Terminal, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 export const ExecutiveSummaryWidget: React.FC = () => {
   const { data: summary, isLoading, isError, refetch } = useExecutiveSummary();

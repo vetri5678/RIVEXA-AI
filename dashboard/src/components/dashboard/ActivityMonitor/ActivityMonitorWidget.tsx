@@ -4,7 +4,7 @@ import { useOverview } from '../../../hooks/useDashboard';
 import { GitCommit, GitPullRequest, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 export const ActivityMonitorWidget: React.FC = () => {
-  const { data: overview, isLoading, isError, refetch } = useOverview();
+  const { isLoading, isError, refetch } = useOverview();
 
   const metrics = [
     { label: 'Commits Today', count: 184, icon: GitCommit, color: 'text-neon-blue' },

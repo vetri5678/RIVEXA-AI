@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -20,7 +20,9 @@
 
   <properties>
     <java.version>17</java.version>
-    <lombok.version>1.18.32</lombok.version>
+    <lombok.version>1.18.46</lombok.version>
+    <!-- Silence Java 25 unnamed-module native-access warnings from Maven internals -->
+    <maven.compiler.release>17</maven.compiler.release>
   </properties>
 
   <dependencies>
@@ -49,7 +51,6 @@
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -97,8 +98,12 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <source>${java.version}</source>
-          <target>${java.version}</target>
+          <!-- Use <release> instead of deprecated <source>/<target> -->
+          <release>${java.version}</release>
+          <compilerArgs>
+            <!-- Suppress unchecked cast warnings from RestTemplate raw Map returns -->
+            <arg>-Xlint:-unchecked</arg>
+          </compilerArgs>
           <annotationProcessorPaths>
             <path>
               <groupId>org.projectlombok</groupId>

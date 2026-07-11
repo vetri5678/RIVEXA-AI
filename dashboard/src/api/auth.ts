@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { mlApiClient } from './client';
 
 export interface UserResponse {
   id: string;
@@ -9,18 +9,13 @@ export interface UserResponse {
 }
 
 export const authApi = {
-  login: async (credentials: URLSearchParams) => {
-    // Standard OAuth2 Form Data URL Encoded format required by FastAPI
-    const { data } = await apiClient.post('/auth/login', credentials, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
+  login: async (credentials: any) => {
+    const { data } = await mlApiClient.post('/auth/login', credentials);
     return data; // returns access_token, refresh_token, token_type
   },
 
   getMe: async (): Promise<UserResponse> => {
-    const { data } = await apiClient.get('/auth/me');
+    const { data } = await mlApiClient.get('/auth/me');
     return data;
   },
 };

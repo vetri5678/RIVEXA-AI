@@ -1,5 +1,6 @@
 """Health and readiness check endpoints."""
 
+import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from core.config import get_settings
 from core.database import get_db, engine
 
+logger = logging.getLogger("riskvision.api.health")
 router = APIRouter(tags=["Health"])
 settings = get_settings()
 
@@ -14,12 +16,20 @@ settings = get_settings()
 @router.get("/health", summary="Liveness health check")
 def health_check():
     """Basic liveness probe — confirms the API process is running."""
-    return {
-        "status": "healthy",
-        "app": settings.app_name,
-        "version": settings.app_version,
-        "environment": settings.environment,
-    }
+    try:
+        logger.debug("Liveness probe triggered (/api/v1/health)")
+        return {
+            "status": "healthy",
+            "app": settings.app_name,
+            "version": settings.app_version,
+            "environment": settings.environment,
+        }
+    except Exception as exc:
+        logger.error("Health check error: %s", exc)
+        return {
+            "status": "unhealthy",
+            "detail": str(exc),
+        }
 
 
 @router.get("/ready", summary="Readiness check with dependency verification")

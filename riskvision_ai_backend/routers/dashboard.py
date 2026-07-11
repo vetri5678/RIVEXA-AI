@@ -133,8 +133,8 @@ def get_repository_ranking(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=5, le=100),
     search: Optional[str] = Query(None),
-    risk_level: Optional[str] = Query(None, regex="^(CRITICAL|HIGH|MEDIUM|LOW)$"),
-    sort_by: str = Query("failure_probability", regex="^(failure_probability|health_score|name)$"),
+    risk_level: Optional[str] = Query(None, pattern="^(CRITICAL|HIGH|MEDIUM|LOW)$"),
+    sort_by: str = Query("failure_probability", pattern="^(failure_probability|health_score|name)$"),
     sort_desc: bool = Query(True),
     current_user: User = Depends(require_permission(Permission.ANALYTICS_READ)),
     db: Session = Depends(get_db),
@@ -176,7 +176,7 @@ def get_feature_importance(
     summary="Prediction Timeline — area chart time series data",
 )
 def get_prediction_timeline(
-    granularity: str = Query("daily", regex="^(hourly|daily|weekly|monthly)$"),
+    granularity: str = Query("daily", pattern="^(hourly|daily|weekly|monthly)$"),
     current_user: User = Depends(require_permission(Permission.ANALYTICS_READ)),
     db: Session = Depends(get_db),
 ):
@@ -229,7 +229,7 @@ def get_model_info(
     summary="Activity Timeline — audit log stream",
 )
 def get_activity(
-    limit: int = Query(50, ge=10, le=200),
+    limit: int = Query(50, ge=1, le=200),
     current_user: User = Depends(require_permission(Permission.ANALYTICS_READ)),
     db: Session = Depends(get_db),
 ):

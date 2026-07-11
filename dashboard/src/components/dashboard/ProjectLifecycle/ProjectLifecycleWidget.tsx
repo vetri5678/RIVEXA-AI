@@ -1,6 +1,5 @@
 import React from 'react';
 import WidgetWrapper from '../Common/WidgetWrapper';
-import { motion } from 'framer-motion';
 
 export const ProjectLifecycleWidget: React.FC = () => {
   const steps = [

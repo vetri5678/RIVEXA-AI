@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSystemStatus } from '../../../hooks/useDashboard';
 import WidgetWrapper from '../Common/WidgetWrapper';
-import { Activity, ShieldCheck, AlertTriangle } from 'lucide-react';
+
 
 export const SystemHealthWidget: React.FC = () => {
   const { data: status, isLoading, isError, refetch } = useSystemStatus();

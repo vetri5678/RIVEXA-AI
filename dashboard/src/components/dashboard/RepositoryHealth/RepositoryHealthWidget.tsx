@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useRepositoryRanking } from '../../../hooks/useDashboard';
 import WidgetWrapper from '../Common/WidgetWrapper';
 import Badge from '../../common/Badge';
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 
 interface RepositoryHealthWidgetProps {
   searchTerm: string;

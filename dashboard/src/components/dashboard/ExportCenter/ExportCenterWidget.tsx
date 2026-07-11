@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import WidgetWrapper from '../Common/WidgetWrapper';
 import dashboardApi from '../../../api/dashboard';
-import { FileDown, FileSpreadsheet, FileJson, AlertCircle } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileJson } from 'lucide-react';
 
 export const ExportCenterWidget: React.FC = () => {
   const [exporting, setExporting] = useState(false);

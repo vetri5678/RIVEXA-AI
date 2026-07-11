@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, AlertTriangle, Info, BellRing } from 'lucide-react';
+import { X, AlertTriangle, BellRing } from 'lucide-react';
 import { useAlerts } from '../../hooks/useDashboard';
 import Badge from '../common/Badge';
 

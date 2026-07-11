@@ -11,14 +11,21 @@ import io
 import json
 import logging
 import sys
+import os
 from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Ensure the working directory is the backend root so that relative paths
+# (e.g. config/pipeline_config.yaml, data/) resolve correctly even when
+# launched from the project root via `npm run backend`.
+_BACKEND_ROOT = Path(__file__).parent.resolve()
+os.chdir(_BACKEND_ROOT)
+
 # Add the root directory to path to ensure absolute imports work when run as script
-sys.path.append(str(Path(__file__).parent.resolve()))
+sys.path.append(str(_BACKEND_ROOT))
 
 from api.routes import router as api_router, state as api_state
 from src.pipeline.base import StagePayload
@@ -28,6 +35,7 @@ from src.pipeline.exceptions import PipelineError
 from contextlib import asynccontextmanager
 from core.database import init_db, get_db_context
 from services.auth_service import AuthService
+from core.config import get_settings
 
 # =============================================================================
 # FastAPI Application Setup
@@ -240,7 +248,7 @@ def main():
     # Server Subcommand
     server_parser = subparsers.add_parser("server", help="Start the FastAPI REST server")
     server_parser.add_argument("--host", default="127.0.0.1", help="Server host IP")
-    server_parser.add_argument("--port", type=int, default=8000, help="Server port number")
+    server_parser.add_argument("--port", type=int, default=get_settings().port, help="Server port number")
 
     # Train Subcommand
     train_parser = subparsers.add_parser("train", help="Run the pipeline training stages (1-9)")
@@ -274,7 +282,7 @@ def main():
     if args.command is None:
         args.command = "server"
         args.host = "127.0.0.1"
-        args.port = 8000
+        args.port = get_settings().port
 
     setup_logging(args.verbose)
 

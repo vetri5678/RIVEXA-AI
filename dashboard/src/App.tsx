@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from './pages/Dashboard';
+import Repositories from './pages/Repositories';
 import Login from './pages/Login';
 
 const queryClient = new QueryClient({
@@ -33,6 +34,14 @@ export const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/repositories"
+            element={
+              <ProtectedRoute>
+                <Repositories />
               </ProtectedRoute>
             }
           />

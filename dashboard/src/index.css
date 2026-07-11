@@ -40,7 +40,8 @@
   @apply bg-cyber-900/60 border border-neon-pink/20 backdrop-blur-md rounded-xl shadow-glass transition-all duration-300;
 }
 .glass-panel-critical:hover {
-  @apply border-neon-pink/40 shadow-neon-red/10;
+  @apply border-neon-pink/40;
+  box-shadow: 0 0 20px rgba(255, 45, 85, 0.1), 0 0 40px rgba(255, 45, 85, 0.05);
 }
 
 .glass-input {
