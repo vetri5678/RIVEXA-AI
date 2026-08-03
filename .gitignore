@@ -1,176 +1,60 @@
 # ============================================================
-#  RiskVision AI — .gitignore
-#  Covers: Python backend, React/TS frontend, env, OS & IDE
+#  RiskVision AI Intelligence Platform — .gitignore
 # ============================================================
 
-
-# ── Environment & Secrets ────────────────────────────────────
-# NEVER commit credentials or secrets
-.env
-.env.*
-!.env.example
-*.env
-
-
-# ── Python ───────────────────────────────────────────────────
-__pycache__/
-*.py[cod]
-*$py.class
-*.pyc
-*.pyo
-*.pyd
-
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
-.Python
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-*.egg
-MANIFEST
-
-# Testing & coverage
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-nosetests.xml
-coverage.xml
-*.coveragerc
-
-# MyPy / type checking
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Jupyter / IPython
-.ipynb_checkpoints/
-*.ipynb
-
-# Logs
-*.log
-logs/
-pipeline.log
-
-
-# ── Node / React / TypeScript ─────────────────────────────────
+# ── Node / Javascript ────────────────────────────────────────
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnpm-store/
-
-# Build output
 dist/
 build/
 out/
-.next/
-.nuxt/
-.output/
+.cache/
 
-# Vite
-.vite/
-vite.config.js.timestamp-*
-
-# TypeScript
-*.tsbuildinfo
-
-# Package manager locks (keep one — delete the others if unused)
-# Uncomment the lock file your project does NOT use:
-# package-lock.json
-# yarn.lock
-# pnpm-lock.yaml
-
-
-# ── Databases & Data ─────────────────────────────────────────
-*.db
-*.sqlite
-*.sqlite3
-data/riskvision.db
-
-# Large data files (ML / analytics)
-*.csv
-*.parquet
-*.h5
-*.hdf5
-*.pkl
-*.pickle
-synthetic_data.csv
-
-
-# ── Machine Learning Models ───────────────────────────────────
-*.model
-*.pt
-*.pth
-*.onnx
-*.joblib
-models/trained/
-models/checkpoints/
-
-
-# ── IDE & Editor ─────────────────────────────────────────────
-# VS Code
-.vscode/
-!.vscode/extensions.json
-!.vscode/settings.json
-
-# JetBrains (PyCharm, WebStorm, etc.)
-.idea/
-*.iml
-*.iws
-*.ipr
-
-# Vim / Emacs
-*.swp
-*.swo
-*~
-\#*\#
-
-
-# ── OS Generated ─────────────────────────────────────────────
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-Thumbs.db
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-
-
-# ── Java / Maven / Spring Boot ───────────────────────────────
-target/
+# ── Java / Spring Boot / Maven ──────────────────────────────
+**/target/
 *.class
 *.jar
 *.war
 *.ear
-.mvn/
-mvnw
-mvnw.cmd
+maven-bin/
+maven.zip
 
+# ── Python / Virtual Env ────────────────────────────────────
+**/__pycache__/
+**/*.py[cod]
+.venv/
+venv/
+env/
+ENV/
 
-# ── Docker ───────────────────────────────────────────────────
-# Keep Dockerfile but ignore local overrides
-docker-compose.override.yml
-.dockerignore
+# ── Databases & Data Files ───────────────────────────────────
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*.csv
+**/*.parquet
+**/*.pkl
+**/*.pickle
+**/*.joblib
 
+# ── Secrets & Environment ────────────────────────────────────
+.env
+.env.*
+*.env
+!.env.example
 
-# ── Miscellaneous ─────────────────────────────────────────────
-*.bak
-*.tmp
-*.temp
-.cache/
-.sass-cache/
-reports/generated/
-riskvision_ai_backend/reports/
+# ── IDEs & Editors ───────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+
+# ── System Files ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.log
+logs/

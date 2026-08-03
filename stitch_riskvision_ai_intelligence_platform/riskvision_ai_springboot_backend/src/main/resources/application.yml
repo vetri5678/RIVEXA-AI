@@ -1,0 +1,16 @@
+openrouter:
+  api-key: ${OPENROUTER_API_KEY:}
+  base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}
+  default-model: ${OPENROUTER_DEFAULT_MODEL:openrouter/free}
+  fallback-models:
+    - google/gemma-4-26b-a4b-it:free
+    - openai/gpt-oss-20b:free
+    - nvidia/nemotron-3-nano-30b-a3b:free
+  timeout-seconds: 30
+  max-retries: 3
+
+spring:
+  http:
+    client:
+      connect-timeout: 30s
+      read-timeout: 30s

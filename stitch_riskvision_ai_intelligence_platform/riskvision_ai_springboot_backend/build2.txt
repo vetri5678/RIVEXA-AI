@@ -1,0 +1,60 @@
+﻿mvn : WARNING: A restricted method in java.lang.System has been called
+At line:1 char:1
++ mvn clean package -DskipTests 2>&1 | Out-File -FilePath "build2.txt"  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: A rest...has been called:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+WARNING: java.lang.System::load has been called by org.fusesource.jansi.internal.JansiLoader in an unnamed module 
+(file:/D:/stitch_riskvision_ai_intelligence_platform%20project/maven-bin/apache-maven-3.9.6/lib/jansi-2.4.0.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by 
+com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper 
+(file:/D:/stitch_riskvision_ai_intelligence_platform%20project/maven-bin/apache-maven-3.9.6/lib/guava-32.0.1-jre.jar)
+WARNING: Please consider reporting this to the maintainers of class 
+com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------< ai.riskvision:riskvision-springboot-backend >-------------
+[INFO] Building RiskVision AI - Spring Boot Backend 1.0.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.3.2:clean (default-clean) @ riskvision-springboot-backend ---
+[INFO] Deleting D:\stitch_riskvision_ai_intelligence_platform project\stitch_riskvision_ai_intelligence_platform\riskvision_ai_springboot_backend\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ riskvision-springboot-backend ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.11.0:compile (default-compile) @ riskvision-springboot-backend ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 70 source files with javac [debug release 17] to target\classes
+[INFO] /D:/stitch_riskvision_ai_intelligence_platform project/stitch_riskvision_ai_intelligence_platform/riskvision_ai_springboot_backend/src/main/java/ai/riskvision/graveyard/util/CookieUtils.java: D:\stitch_riskvision_ai_intelligence_platform project\stitch_riskvision_ai_intelligence_platform\riskvision_ai_springboot_backend\src\main\java\ai\riskvision\graveyard\util\CookieUtils.java uses or overrides a deprecated API.
+[INFO] /D:/stitch_riskvision_ai_intelligence_platform project/stitch_riskvision_ai_intelligence_platform/riskvision_ai_springboot_backend/src/main/java/ai/riskvision/graveyard/util/CookieUtils.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ riskvision-springboot-backend ---
+[INFO] skip non existing resourceDirectory D:\stitch_riskvision_ai_intelligence_platform project\stitch_riskvision_ai_intelligence_platform\riskvision_ai_springboot_backend\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ riskvision-springboot-backend ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.1.2:test (default-test) @ riskvision-springboot-backend ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.3.0:jar (default-jar) @ riskvision-springboot-backend ---
+[INFO] Building jar: D:\stitch_riskvision_ai_intelligence_platform project\stitch_riskvision_ai_intelligence_platform\riskvision_ai_springboot_backend\target\riskvision-springboot-backend-1.0.0.jar
+[INFO] 
+[INFO] --- spring-boot:3.2.5:repackage (repackage) @ riskvision-springboot-backend ---
+[INFO] Replacing main artifact D:\stitch_riskvision_ai_intelligence_platform project\stitch_riskvision_ai_intelligence_platform\riskvision_ai_springboot_backend\target\riskvision-springboot-backend-1.0.0.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+[INFO] The original artifact has been renamed to D:\stitch_riskvision_ai_intelligence_platform project\stitch_riskvision_ai_intelligence_platform\riskvision_ai_springboot_backend\target\riskvision-springboot-backend-1.0.0.jar.original
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  16.660 s
+[INFO] Finished at: 2026-07-22T15:15:43+05:30
+[INFO] ------------------------------------------------------------------------

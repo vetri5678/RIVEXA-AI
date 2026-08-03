@@ -1,0 +1,46 @@
+# ===========================================================================
+# RiskVision AI Backend — Dependencies
+# ===========================================================================
+
+# Core data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Machine Learning
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+
+# Explainability
+shap>=0.43.0
+
+# Serialization
+joblib>=1.3.0
+
+# File format support
+openpyxl>=3.1.0
+chardet>=5.0.0
+
+# Configuration
+pyyaml>=6.0.0
+
+# API Framework
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+
+# Report generation (optional)
+jinja2>=3.1.0
+
+# Database & Security
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.9
+
+# Settings management
+pydantic-settings>=2.0.0
+
+# Supabase SDK (optional — for direct REST access alongside SQLAlchemy)
+supabase>=2.0.0
+

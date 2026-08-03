@@ -1,0 +1,87 @@
+{
+  "model_name": "Random Forest",
+  "model_version": "1.0.0",
+  "status": "Development Model (Synthetic Dataset)",
+  "trained_at": "2026-07-28T10:19:02.972865+00:00",
+  "dataset_records": 20000,
+  "feature_count": 22,
+  "feature_names": [
+    "Project Budget",
+    "Actual Cost",
+    "Estimated Duration",
+    "Actual Duration",
+    "Schedule Delay",
+    "Completion %",
+    "Team Size",
+    "Developer Experience",
+    "Open Issues",
+    "Critical Bugs",
+    "Code Coverage",
+    "Technical Debt",
+    "Security Vulnerabilities",
+    "Dependency Vulnerabilities",
+    "Repository Health",
+    "Build Failures",
+    "Deployment Failures",
+    "Requirement Changes",
+    "Customer Satisfaction",
+    "Priority",
+    "Department",
+    "Project Type"
+  ],
+  "classes": [
+    "HIGH",
+    "LOW",
+    "MEDIUM"
+  ],
+  "number_of_trees": 150,
+  "metrics": {
+    "accuracy": 0.9387,
+    "precision": 0.9287,
+    "recall": 0.9387,
+    "f1_score": 0.93,
+    "roc_auc": 0.9763,
+    "cross_val_mean": 0.9332,
+    "confusion_matrix": [
+      [
+        3529,
+        0,
+        25
+      ],
+      [
+        0,
+        0,
+        23
+      ],
+      [
+        197,
+        0,
+        226
+      ]
+    ]
+  },
+  "feature_importance": {
+    "Project Budget": 0.03351265670409536,
+    "Actual Cost": 0.042277844593281884,
+    "Estimated Duration": 0.04749823261824396,
+    "Actual Duration": 0.06728597851139241,
+    "Schedule Delay": 0.23880508045175172,
+    "Completion %": 0.02695085222684294,
+    "Team Size": 0.023026247960828507,
+    "Developer Experience": 0.05233564486224842,
+    "Open Issues": 0.019035343362710455,
+    "Critical Bugs": 0.04122248056412671,
+    "Code Coverage": 0.04338427128281141,
+    "Technical Debt": 0.13142322734371054,
+    "Security Vulnerabilities": 0.03090346974653006,
+    "Dependency Vulnerabilities": 0.02078472148403177,
+    "Repository Health": 0.0392609198645492,
+    "Build Failures": 0.022217145983534428,
+    "Deployment Failures": 0.019029238696271277,
+    "Requirement Changes": 0.024837101200696172,
+    "Customer Satisfaction": 0.04697009763356292,
+    "Priority": 0.007999753118142874,
+    "Department": 0.010373454752202398,
+    "Project Type": 0.010866237038434704
+  }
+}

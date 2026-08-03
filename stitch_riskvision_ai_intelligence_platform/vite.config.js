@@ -1,21 +1,24 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  root: 'stitch_riskvision_ai_intelligence_platform',
   server: {
     port: 5176,
+    // Proxy repository requests to Spring Boot backend, other requests to FastAPI backend
     proxy: {
-      // ── Spring Boot (:8080) routes ────────────────────────────────────────
       '/api/v1/repositories': {
         target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
           proxy.on('error', (err, req, res) => {
-            console.error(`[Proxy] /repositories → Spring Boot failed (${err.message})`);
+            console.error(`[Vite Proxy Error] Failed to proxy ${req.method} ${req.url} to Spring Boot target (${err.message})`);
             if (res && !res.headersSent) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Spring Boot unavailable', message: err.message, path: req.url }));
+              res.end(JSON.stringify({
+                error: 'Service Unavailable (ECONNREFUSED)',
+                message: `Spring Boot server unreachable at http://localhost:8080. (${err.message})`,
+                path: req.url,
+              }));
             }
           });
         },
@@ -26,64 +29,60 @@ export default defineConfig({
         secure: false,
         configure: (proxy, _options) => {
           proxy.on('error', (err, req, res) => {
-            console.error(`[Proxy] /auth → Spring Boot failed (${err.message})`);
-            if (res && !res.headersSent) {
-              res.writeHead(503, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Spring Boot unavailable', message: err.message, path: req.url }));
-            }
-          });
-        },
-      },
-      '/api/v1/me': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/api/v1/projects': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/api/v1/health': {
-        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://localhost:8000',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/api/v1/profile': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-      },
-
-      // ── FastAPI ML Engine (:8000) routes ──────────────────────────────────
-      // IMPORTANT: /api/v1/pipeline MUST route to FastAPI (not Spring Boot)
-      // so the simulator and dashboard status banner get live ML model state.
-      '/api/v1/pipeline': {
-        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://localhost:8000',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, req, res) => {
-            console.error(`[Proxy] /pipeline → FastAPI ML Engine failed (${err.message})`);
+            console.error(`[Vite Proxy Error] Failed to proxy ${req.method} ${req.url} to Spring Boot target (${err.message})`);
             if (res && !res.headersSent) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
-                error: 'FastAPI ML Engine Unavailable (ECONNREFUSED)',
-                message: `FastAPI unreachable at http://localhost:8000. (${err.message})`,
+                error: 'Service Unavailable (ECONNREFUSED)',
+                message: `Spring Boot server unreachable at http://localhost:8080. (${err.message})`,
                 path: req.url,
-                status: 'UNTRAINED',
-                loaded_model: null,
-                reports_count: 0,
               }));
             }
           });
         },
       },
-
-      '/oauth2': {
+      '/api/v1/pipeline': {
         target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
+      },
+      '/api/v1/health': {
+        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/dashboard': {
+        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/predictions': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/retraining': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api': {
+        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, req, res) => {
+            console.error(`[Vite Proxy Error] Failed to proxy ${req.method} ${req.url} to Spring Boot target (${err.message})`);
+            if (res && !res.headersSent) {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                error: 'Service Unavailable (ECONNREFUSED)',
+                message: `Backend server unreachable at http://localhost:8080. Please start the backend service. (${err.message})`,
+                path: req.url,
+              }));
+            }
+          });
+        },
       },
     },
   },

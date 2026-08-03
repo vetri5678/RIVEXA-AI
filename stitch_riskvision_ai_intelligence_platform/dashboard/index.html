@@ -1,0 +1,48 @@
+<!doctype html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign In | RiskVision AI</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface": "#07122a",
+              "surface-dim": "#07122a",
+              "surface-bright": "#2f3952",
+              "surface-container-lowest": "#030d25",
+              "surface-container-low": "#101b33",
+              "surface-container": "#151f37",
+              "surface-container-high": "#1f2942",
+              "surface-container-highest": "#2a344e",
+              "on-surface": "#d9e2ff",
+              "on-surface-variant": "#bac9cc",
+              "outline": "#849396",
+              "outline-variant": "#3b494c",
+              "surface-tint": "#00daf3",
+              "primary": "#c3f5ff",
+              "primary-container": "#00e5ff",
+              "on-primary": "#00363d",
+              "on-primary-container": "#00626e"
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"]
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-[#07122a] text-[#d9e2ff] font-sans antialiased min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>
