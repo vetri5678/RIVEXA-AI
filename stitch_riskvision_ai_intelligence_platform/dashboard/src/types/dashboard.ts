@@ -47,6 +47,7 @@ export interface DashboardOverviewResponse {
   avg_confidence: number;
   graveyard_index: number;
   health_score: number;
+  github_required?: boolean;
 }
 
 export interface RiskSlice {

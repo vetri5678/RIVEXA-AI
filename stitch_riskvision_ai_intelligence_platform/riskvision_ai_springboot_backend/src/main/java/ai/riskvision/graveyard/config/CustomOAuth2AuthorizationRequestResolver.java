@@ -41,13 +41,25 @@ public class CustomOAuth2AuthorizationRequestResolver implements OAuth2Authoriza
         String uri = request.getRequestURI();
         String provider = uri.substring(uri.lastIndexOf('/') + 1);
 
+        log.info("[STAGE 1: OAUTH_REQUEST_INITIATED] Intercepted OAuth request for provider='{}', URI='{}'", provider, uri);
+        log.info("[STAGE 2: AUTHORIZATION_RESOLVER_INTERCEPT] Validating client registration. Client ID configured: {}", (clientId != null && !isPlaceholderClientId(clientId)));
+
         if (isPlaceholderClientId(clientId)) {
-            log.warn("OAuth authorization attempt for provider '{}' intercepted: Client ID is set to placeholder '{}'. Redirecting to error handler.", provider, clientId);
+            log.warn("[STAGE 2: AUTHORIZATION_RESOLVER_INTERCEPT] OAuth authorization attempt for provider '{}' intercepted: Client ID is set to placeholder '{}'.", provider, clientId);
             throw new OAuth2AuthenticationException(new OAuth2Error(
                     "unconfigured_" + provider + "_client",
                     provider.toUpperCase() + " OAuth App credentials are not configured. Please set " + provider.toUpperCase() + "_CLIENT_ID and " + provider.toUpperCase() + "_CLIENT_SECRET in your .env file.",
                     null
             ));
+        }
+
+        // NOTE: GitHub does NOT support prompt=select_account (unlike Google/Microsoft).
+        // GitHub uses its own browser-side session cookie. When users want to switch GitHub
+        // accounts, they must do so from GitHub's own account switcher (github.com → avatar menu).
+        // RIVEXA logout clears RIVEXA session but does NOT clear GitHub's own browser session.
+        // This is the correct and expected OAuth2 behavior per GitHub's documentation.
+        if ("github".equalsIgnoreCase(provider)) {
+            log.info("[STAGE 2: AUTHORIZATION_RESOLVER_INTERCEPT] GitHub OAuth request — using standard GitHub authorization flow (no prompt override).");
         }
 
         return authorizationRequest;

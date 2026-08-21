@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { useAuditLogs, useExplainEventMutation } from '../../../hooks/useDashboard';
+import { getStoredUser, isAdminUser } from '../../../utils/auth';
 import WidgetWrapper from '../Common/WidgetWrapper';
 import AICard from '../../common/AICard';
 import {
@@ -18,18 +19,25 @@ import {
 import type { ActivityItem } from '../../../types/dashboard';
 
 export const ActivityFeedWidget: React.FC = () => {
+  const user = getStoredUser();
+  const isAdmin = isAdminUser(user);
+
   const [page, setPage] = useState(0);
   const [pageSize] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [moduleFilter, setModuleFilter] = useState<string>('ALL');
 
-  const { data: auditData, isLoading, isError, refetch } = useAuditLogs(page, pageSize);
+  const { data: auditData, isLoading, isError, refetch } = useAuditLogs(page, pageSize, { enabled: isAdmin });
   const explainMutation = useExplainEventMutation();
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
+
+  if (!isAdmin) {
+    return null;
+  }
 
   const logs: ActivityItem[] = auditData?.items || [];
 
@@ -144,7 +152,7 @@ export const ActivityFeedWidget: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `riskvision_audit_logs_${new Date().toISOString().slice(0, 10)}.${type}`;
+    a.download = `rivexa_audit_logs_${new Date().toISOString().slice(0, 10)}.${type}`;
     a.click();
     URL.revokeObjectURL(url);
   };

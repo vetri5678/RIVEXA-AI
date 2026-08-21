@@ -6,7 +6,8 @@ import ai.riskvision.graveyard.repository.AuditLogRepository;
 import ai.riskvision.graveyard.repository.TelemetryMetricsEntityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import ai.riskvision.graveyard.config.TelemetryWebSocketHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +21,8 @@ import java.util.*;
 @Slf4j
 public class TelemetryPublisher {
 
-    private final SimpMessagingTemplate messagingTemplate;
+    private final TelemetryWebSocketHandler webSocketHandler;
+    private final ObjectMapper objectMapper;
     private final TelemetryMetricsEntityRepository telemetryMetricsRepository;
     private final AuditLogRepository auditLogRepository;
 
@@ -63,7 +65,12 @@ public class TelemetryPublisher {
             }
             payload.put("timestamp", LocalDateTime.now().toString());
 
-            messagingTemplate.convertAndSend("/topic/telemetry", payload);
+            Map<String, Object> message = new LinkedHashMap<>();
+            message.put("type", "TELEMETRY");
+            message.put("payload", payload);
+            String json = objectMapper.writeValueAsString(message);
+
+            webSocketHandler.broadcast(json);
             log.debug("Broadcast telemetry update via WebSocket");
         } catch (Exception e) {
             log.error("Failed to broadcast telemetry via WebSocket: {}", e.getMessage());
@@ -100,7 +107,13 @@ public class TelemetryPublisher {
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("events", newEvents);
                 payload.put("timestamp", LocalDateTime.now().toString());
-                messagingTemplate.convertAndSend("/topic/audit", payload);
+
+                Map<String, Object> message = new LinkedHashMap<>();
+                message.put("type", "AUDIT");
+                message.put("payload", payload);
+                String json = objectMapper.writeValueAsString(message);
+
+                webSocketHandler.broadcast(json);
                 log.debug("Broadcast {} new audit events via WebSocket", newEvents.size());
             }
 
@@ -129,7 +142,13 @@ public class TelemetryPublisher {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("events", List.of(event));
             payload.put("timestamp", LocalDateTime.now().toString());
-            messagingTemplate.convertAndSend("/topic/audit", payload);
+
+            Map<String, Object> message = new LinkedHashMap<>();
+            message.put("type", "AUDIT");
+            message.put("payload", payload);
+            String json = objectMapper.writeValueAsString(message);
+
+            webSocketHandler.broadcast(json);
         } catch (Exception e) {
             log.error("Failed to publish immediate audit event via WebSocket: {}", e.getMessage());
         }

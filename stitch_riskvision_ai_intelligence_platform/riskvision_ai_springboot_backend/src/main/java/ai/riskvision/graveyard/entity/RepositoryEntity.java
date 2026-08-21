@@ -22,6 +22,14 @@ public class RepositoryEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
+    /**
+     * The RIVEXA user who owns this repository.
+     * All dashboard queries MUST filter by this field to enforce per-user data isolation.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private UserEntity user;
+
     @Column(name = "repository_name", nullable = false, length = 200)
     private String repositoryName;
 

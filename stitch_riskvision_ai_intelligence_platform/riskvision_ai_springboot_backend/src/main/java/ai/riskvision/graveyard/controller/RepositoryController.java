@@ -1,18 +1,23 @@
 package ai.riskvision.graveyard.controller;
 
 import ai.riskvision.graveyard.dto.repository.*;
-import ai.riskvision.graveyard.entity.RepositoryPredictionEntity;
+import ai.riskvision.graveyard.entity.*;
 import ai.riskvision.graveyard.service.*;
-import ai.riskvision.graveyard.util.GitHubUrlParser;
+import ai.riskvision.graveyard.util.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import ai.riskvision.graveyard.repository.OAuthAccountRepository;
+import ai.riskvision.graveyard.repository.UserRepository;
 import java.security.Principal;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 
@@ -27,6 +32,8 @@ public class RepositoryController {
     private final RepositorySyncService syncService;
     private final RepoPredictionService predictionService;
     private final RepositoryValidationService validationService;
+    private final UserRepository userRepository;
+    private final OAuthAccountRepository oauthAccountRepository;
 
     // ─── GET /api/v1/repositories ─────────────────────────────────────────────
     @GetMapping
@@ -41,10 +48,13 @@ public class RepositoryController {
             @RequestParam(required = false) String predictionStatus,
             @RequestParam(required = false) String gitProvider,
             @RequestParam(required = false) String language,
-            @RequestParam(required = false) String organization) {
+            @RequestParam(required = false) String organization,
+            Principal principal) {
 
-        PagedRepositoryResponse response = repositoryService.findAll(
-                page, size, sortBy, sortDir,
+        // Resolve the calling user — scope all results to their repositories only
+        String callerEmail = principal != null ? principal.getName() : null;
+        PagedRepositoryResponse response = repositoryService.findAllByUser(
+                callerEmail, page, size, sortBy, sortDir,
                 search, status, riskLevel, predictionStatus, gitProvider, language, organization
         );
         return ResponseEntity.ok(response);
@@ -52,8 +62,9 @@ public class RepositoryController {
 
     // ─── GET /api/v1/repositories/statistics ──────────────────────────────────
     @GetMapping("/statistics")
-    public ResponseEntity<RepositoryStatisticsResponse> getStatistics() {
-        return ResponseEntity.ok(analyticsService.computeStatistics());
+    public ResponseEntity<RepositoryStatisticsResponse> getStatistics(Principal principal) {
+        String callerEmail = principal != null ? principal.getName() : null;
+        return ResponseEntity.ok(analyticsService.computeStatisticsForUser(callerEmail));
     }
 
     // ─── GET /api/v1/repositories/{id} ────────────────────────────────────────
@@ -68,7 +79,8 @@ public class RepositoryController {
             @Valid @RequestBody RepositoryCreateRequest request,
             Principal principal) {
         String actor = principal != null ? principal.getName() : "API";
-        RepositoryResponse response = repositoryService.create(request, actor);
+        // Pass actor (email) so RepositoryService can associate the repo with the user
+        RepositoryResponse response = repositoryService.createForUser(request, actor);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -123,11 +135,47 @@ public class RepositoryController {
         ));
     }
 
+    private Optional<String> getValidUserGitHubToken(Principal principal) {
+        if (principal == null || principal.getName() == null) {
+            return Optional.empty();
+        }
+        String name = principal.getName();
+        Optional<UserEntity> userOpt = userRepository.findByEmail(name)
+                .or(() -> userRepository.findByUsername(name));
+        if (userOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<OAuthAccountEntity> oauthOpt = oauthAccountRepository.findByUserAndProvider(userOpt.get(), "github");
+        if (oauthOpt.isEmpty() || oauthOpt.get().getAccessToken() == null || oauthOpt.get().getAccessToken().trim().isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(oauthOpt.get().getAccessToken().trim());
+    }
+
+    @org.springframework.beans.factory.annotation.Value("${github.token:}")
+    private String systemGitHubToken;
+
+    private boolean isPredictionAuthorized(Principal principal) {
+        if (getValidUserGitHubToken(principal).isPresent()) {
+            return true;
+        }
+        return systemGitHubToken != null && !systemGitHubToken.trim().isEmpty();
+    }
+
     // ─── POST /api/v1/repositories/{id}/predict ───────────────────────────────
     @PostMapping("/{id}/predict")
     public ResponseEntity<Map<String, Object>> predict(@PathVariable UUID id, Principal principal) {
         String actor = principal != null ? principal.getName() : "MANUAL";
         log.info("[RepositoryController] POST /repositories/{}/predict — actor={}", id, actor);
+
+        if (!isPredictionAuthorized(principal)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "error", "GitHub authorization required",
+                    "message", "An active GitHub OAuth connection or valid system GitHub token is required to run predictions."
+            ));
+        }
+
         try {
             RepositoryPredictionEntity result = predictionService.runPrediction(id, actor);
             log.info("[RepositoryController] Prediction succeeded for repositoryId={} riskLevel={} failureProb={}",
@@ -190,6 +238,14 @@ public class RepositoryController {
         String githubUrl = body != null ? body.get("githubUrl") : null;
 
         log.info("[RepositoryController] POST /repositories/predict-by-url — actor={} url={}", actor, githubUrl);
+
+        if (!isPredictionAuthorized(principal)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "error", "GitHub authorization required",
+                    "message", "An active GitHub OAuth connection or valid system GitHub token is required to run predictions."
+            ));
+        }
 
         // ── 1. Validate URL ────────────────────────────────────────────────────
         if (githubUrl == null || githubUrl.isBlank()) {
@@ -290,18 +346,47 @@ public class RepositoryController {
     }
 
     // ─── GET /api/v1/repositories/export ──────────────────────────────────────
-    @GetMapping("/export")
-    public ResponseEntity<PagedRepositoryResponse> export(
+    @GetMapping(value = "/export", produces = {"text/csv", "application/json"})
+    public ResponseEntity<?> export(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String riskLevel,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "1000") int size) {
-        // Returns a large page for client-side export
-        PagedRepositoryResponse response = repositoryService.findAll(
-                page, size, "createdAt", "desc",
+            @RequestParam(defaultValue = "1000") int size,
+            Principal principal) {
+        // Scope export to the authenticated user's repositories only
+        String callerEmail = principal != null ? principal.getName() : null;
+        PagedRepositoryResponse response = repositoryService.findAllByUser(
+                callerEmail, page, size, "createdAt", "desc",
                 null, status, riskLevel, null, null, null, null
         );
-        return ResponseEntity.ok(response);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("ID,Repository Name,Organization,Git Provider,Status,Risk Level,Prediction Status,Health Score,Failure Probability (%),Contributors,Open Issues,Created At\n");
+
+        if (response.getContent() != null) {
+            for (RepositorySummaryResponse repo : response.getContent()) {
+                csv.append(String.format("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%.1f,%.1f,%d,%d,\"%s\"\n",
+                        repo.getId(),
+                        repo.getRepositoryName() != null ? repo.getRepositoryName().replace("\"", "\"\"") : "",
+                        repo.getOrganization() != null ? repo.getOrganization().replace("\"", "\"\"") : "",
+                        repo.getGitProvider() != null ? repo.getGitProvider() : "GITHUB",
+                        repo.getStatus() != null ? repo.getStatus() : "ACTIVE",
+                        repo.getRiskLevel() != null ? repo.getRiskLevel() : "LOW",
+                        repo.getPredictionStatus() != null ? repo.getPredictionStatus() : "PENDING",
+                        repo.getHealthScore() != null ? repo.getHealthScore() : 0.0,
+                        (repo.getFailureProbability() != null ? repo.getFailureProbability() : 0.0) * 100,
+                        repo.getContributors() != null ? repo.getContributors() : 0,
+                        repo.getOpenIssues() != null ? repo.getOpenIssues() : 0,
+                        repo.getCreatedAt() != null ? repo.getCreatedAt().toString() : ""
+                ));
+            }
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv; charset=UTF-8"));
+        headers.setContentDispositionFormData("attachment", "repository_intelligence_export.csv");
+
+        return new ResponseEntity<>(csv.toString(), headers, HttpStatus.OK);
     }
 
     // ─── POST /api/v1/repositories/validate-token ─────────────────────────────

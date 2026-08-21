@@ -29,7 +29,7 @@ def test_model_loader_initialization():
     model_loader.initialize()
     assert model_loader.is_loaded is True
     assert model_loader.model is not None
-    assert model_loader.metadata.get("model_name") == "Random Forest"
+    assert model_loader.metadata.get("model_name") in ["Random Forest", "XGBoost"]
     assert "accuracy" in model_loader.metadata.get("metrics", {})
 
 
@@ -69,8 +69,8 @@ def test_single_prediction_logic():
     assert 0.0 <= result["confidence"] <= 100.0
     assert 0.0 <= result["probability"] <= 1.0
     assert len(result["topFeatures"]) > 0
-    assert result["model"] == "Random Forest"
-    assert result["version"] == "1.0.0"
+    assert result["model"] in ["Random Forest", "XGBoost"]
+    assert result["version"] in ["1.0.0", "xgboost-v1.0"]
 
 
 def test_health_endpoint():

@@ -195,6 +195,10 @@ public class AuditLogService {
         item.put("duration_ms", entity.getDurationMs());
         item.put("metadata", entity.getMetadata());
         item.put("created_at", entity.getCreatedAt() != null ? entity.getCreatedAt().toString() : LocalDateTime.now().toString());
+        item.put("timestamp", entity.getCreatedAt() != null ? entity.getCreatedAt().toString() : LocalDateTime.now().toString());
+        item.put("user_id", entity.getUser() != null ? entity.getUser().getId().toString() : null);
+        item.put("resource_type", entity.getResourceType());
+        item.put("resource_id", entity.getResourceId());
         return item;
     }
 }

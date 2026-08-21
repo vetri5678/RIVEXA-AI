@@ -79,21 +79,9 @@ def _resolve_dataset_path(dataset_path: str | None, base_dir: str) -> Path:
 
 
 def train_model(dataset_path: str = None, models_dir: str = None) -> dict:
-    """
-    Train and persist the Random Forest risk classifier.
-
-    Parameters
-    ----------
-    dataset_path : str, optional
-        Absolute path to the training CSV.  Auto-detected if omitted.
-    models_dir : str, optional
-        Directory for model artifacts.  Defaults to <backend_root>/models.
-
-    Returns
-    -------
-    dict
-        model_metadata containing all performance metrics and artifact paths.
-    """
+    """Delegates model training to the active XGBoost model training pipeline."""
+    from services.train_xgb_model import train_xgb_model
+    return train_xgb_model(dataset_path, models_dir)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

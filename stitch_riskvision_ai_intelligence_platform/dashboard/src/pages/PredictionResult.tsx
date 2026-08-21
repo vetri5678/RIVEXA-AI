@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { usePredictionResult } from '../hooks/useDashboard';
@@ -20,8 +20,11 @@ import {
   Clock,
   Loader2,
   ChevronRight,
+  ChevronDown,
   TrendingUp,
   TrendingDown,
+  Target,
+  Calendar,
 } from 'lucide-react';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -35,16 +38,24 @@ const getRiskColor = (level: string) => {
   }
 };
 
-const formatDate = (val: string | null | undefined) => {
-  if (!val) return 'N/A';
-  try { return new Date(val).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
-  catch { return val; }
+const formatDate = (val: any) => {
+  if (!val) return 'Data unavailable';
+  try {
+    if (Array.isArray(val)) {
+      const [y, m, d, h, min, s] = val;
+      return new Date(y, m - 1, d, h || 0, min || 0, s || 0).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    }
+    const parsed = new Date(val);
+    if (isNaN(parsed.getTime())) return 'Data unavailable';
+    return parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+  catch { return 'Data unavailable'; }
 };
 
 interface FeatureItem {
   feature: string;
   impact: number;
-  direction: 'increases_risk' | 'decreases_risk';
+  direction: string;
 }
 
 function parseJson<T>(raw: string | null | undefined): T[] {
@@ -53,25 +64,123 @@ function parseJson<T>(raw: string | null | undefined): T[] {
   catch { return []; }
 }
 
+// ── Recommendation Types ─────────────────────────────────────────────────────
+
+interface AiRecommendation {
+  title: string;
+  risk_detected: string;
+  current_condition: string;
+  recommended_action: string;
+  why_it_matters: string;
+  expected_impact: string;
+  estimated_risk_reduction: string;
+  implementation_effort: string;
+  suggested_priority: string;
+}
+
+interface RichRecommendations {
+  recommendations: AiRecommendation[];
+  roadmap: {
+    immediate: string[];
+    short_term: string[];
+    medium_term: string[];
+  };
+  projected_status: {
+    projected_risk_score: number;
+    projected_risk_level: string;
+    potential_improvement: string;
+  };
+}
+
+function parseRichRecommendations(raw: string | null | undefined): RichRecommendations | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && 'recommendations' in parsed) {
+      return parsed as RichRecommendations;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseLegacyRecommendations(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(String);
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+const getPriorityStyle = (priority: string) => {
+  const p = priority?.toLowerCase() || '';
+  if (p.includes('p0') || p.includes('immediate') || p.includes('critical')) {
+    return { badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30', dot: 'bg-rose-400', label: 'P0 CRITICAL' };
+  } else if (p.includes('p1') || p.includes('high')) {
+    return { badge: 'bg-orange-500/20 text-orange-300 border-orange-500/30', dot: 'bg-orange-400', label: 'P1 HIGH' };
+  } else if (p.includes('p2') || p.includes('medium')) {
+    return { badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', dot: 'bg-amber-400', label: 'P2 MEDIUM' };
+  }
+  return { badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', dot: 'bg-emerald-400', label: 'P3 LOW' };
+};
+
+const getEffortStyle = (effort: string) => {
+  const e = effort?.toLowerCase() || '';
+  if (e.includes('high')) return 'text-rose-400';
+  if (e.includes('medium')) return 'text-amber-400';
+  return 'text-emerald-400';
+};
+
+const getImpactStyle = (impact: string) => {
+  const i = impact?.toLowerCase() || '';
+  if (i.includes('critical')) return 'text-rose-400';
+  if (i.includes('high')) return 'text-orange-400';
+  if (i.includes('medium')) return 'text-amber-400';
+  return 'text-emerald-400';
+};
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export const PredictionResult: React.FC = () => {
   const { predictionId } = useParams<{ predictionId: string }>();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const { data, isLoading, isError, error, refetch } = usePredictionResult(predictionId ?? null);
   const pdfMutation   = useDownloadPdfReport();
   const excelMutation = useDownloadExcelReport();
 
-  // Parse SHAP feature importance JSON
+  // Parse SHAP feature importance JSON with robust key mapping
+  const featureJsonRaw = data?.featureImportanceJson || data?.feature_importance_json;
   const features = useMemo<FeatureItem[]>(() => {
-    return parseJson<FeatureItem>(data?.featureImportanceJson);
-  }, [data?.featureImportanceJson]);
+    const rawList = parseJson<any>(featureJsonRaw);
+    return rawList.map((item) => {
+      const feat = item.display_name || item.feature_name || item.feature || 'Unknown Feature';
+      const imp = typeof item.impact === 'number' ? item.impact : 0;
+      const dir = String(item.direction || '').toLowerCase();
+      return {
+        feature: String(feat),
+        impact: imp,
+        direction: dir,
+      };
+    });
+  }, [featureJsonRaw]);
 
-  const recommendations = useMemo<string[]>(() => {
-    return parseJson<string>(data?.recommendationsJson);
-  }, [data?.recommendationsJson]);
+  // Rich AI recommendations parsing
+  const recsJsonRaw = data?.recommendationsJson || data?.recommendations_json;
+  const richRecommendations = useMemo<RichRecommendations | null>(() => {
+    return parseRichRecommendations(recsJsonRaw);
+  }, [recsJsonRaw]);
+  const legacyRecommendations = useMemo<string[]>(() => {
+    if (richRecommendations) return [];
+    return parseLegacyRecommendations(recsJsonRaw);
+  }, [recsJsonRaw, richRecommendations]);
+  const [expandedRec, setExpandedRec] = useState<number | null>(null);
 
   const maxImpact = useMemo(
     () => Math.max(...features.map((f) => Math.abs(f.impact)), 0.01),
@@ -80,30 +189,56 @@ export const PredictionResult: React.FC = () => {
 
   // ── Download helpers ──────────────────────────────────────────────────────
 
+  const repoIdVal = data?.repositoryId || data?.repository_id;
+  const predIdVal = data?.predictionId || data?.prediction_id;
+  const targetId  = predIdVal || predictionId || repoIdVal;
+
   const handleDownloadPdf = async () => {
-    if (!data?.repositoryId) return;
+    if (!targetId) return;
+    setDownloadError(null);
     try {
-      const blob = await pdfMutation.mutateAsync(data.repositoryId);
+      const blob = await pdfMutation.mutateAsync(targetId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `prediction-${predictionId}-report.pdf`;
+      const sanitizeName = (data?.repositoryName || data?.repository_name || 'project').replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `RIVEXA_${sanitizeName}_Risk_Report.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { /* silently ignore – mutation error handled by react-query */ }
+    } catch (err: any) {
+      console.error(err);
+      if (err?.response?.status === 403) {
+        setDownloadError("Forbidden: You do not have permission to download this report.");
+      } else if (err?.response?.status === 404) {
+        setDownloadError("Report not found on the server.");
+      } else {
+        setDownloadError(err?.response?.data?.message || err?.message || "Failed to download PDF report. Please try again.");
+      }
+    }
   };
 
   const handleDownloadExcel = async () => {
-    if (!data?.repositoryId) return;
+    if (!targetId) return;
+    setDownloadError(null);
     try {
-      const blob = await excelMutation.mutateAsync(data.repositoryId);
+      const blob = await excelMutation.mutateAsync(targetId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `prediction-${predictionId}-report.xlsx`;
+      const sanitizeName = (data?.repositoryName || data?.repository_name || 'project').replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `RIVEXA_${sanitizeName}_Risk_Report.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { /* silently ignore */ }
+    } catch (err: any) {
+      console.error(err);
+      if (err?.response?.status === 403) {
+        setDownloadError("Forbidden: You do not have permission to download this report.");
+      } else if (err?.response?.status === 404) {
+        setDownloadError("Report not found on the server.");
+      } else {
+        setDownloadError(err?.response?.data?.message || err?.message || "Failed to download Excel spreadsheet. Please try again.");
+      }
+    }
   };
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -160,15 +295,40 @@ export const PredictionResult: React.FC = () => {
     );
   }
 
-  // ── Result ────────────────────────────────────────────────────────────────
+  // ── Result Field Resolution ───────────────────────────────────────────────
 
-  const risk = getRiskColor(data.riskLevel ?? 'LOW');
-  const failPct = ((data.failureProbability ?? 0) * 100).toFixed(1);
-  const confidencePct = ((data.confidence ?? 0) * 100).toFixed(1);
-  const healthPct = (data.healthScore ?? 0).toFixed(1);
+  const failureProbVal = data?.failureProbability ?? data?.failure_probability;
+  const riskLevelVal   = data?.riskLevel || data?.risk_level;
+  const riskScoreVal   = data?.riskScore ?? data?.risk_score;
+  const healthScoreVal = data?.healthScore ?? data?.health_score;
+  const confidenceVal  = data?.confidence;
+  const modelVerVal    = data?.modelVersion || data?.model_version;
+  const predStatusVal  = data?.predictionStatus || data?.prediction_status;
+  const repoNameVal    = data?.repositoryName || data?.repository_name;
+  const repoUrlVal     = data?.repositoryUrl || data?.repository_url;
+  const gitProviderVal = data?.gitProvider || data?.git_provider;
+  const triggeredByVal = data?.triggeredBy || data?.triggered_by;
+  const createdAtVal   = data?.createdAt || data?.created_at;
+
+  const risk = getRiskColor(riskLevelVal ?? 'LOW');
+  const failPct = failureProbVal != null ? (failureProbVal * 100).toFixed(1) : null;
+  const confidencePct = confidenceVal != null ? (confidenceVal * 100).toFixed(1) : null;
+  const healthPct = healthScoreVal != null ? healthScoreVal.toFixed(1) : null;
 
   return (
     <DashboardLayout onSearchChange={setSearchTerm} searchValue={searchTerm} onQuickAction={() => {}}>
+
+      {downloadError && (
+        <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldAlert size={16} />
+            <span>{downloadError}</span>
+          </div>
+          <button onClick={() => setDownloadError(null)} className="text-rose-400 hover:text-white font-bold text-xs uppercase px-2 py-1">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className={`glass-strong rounded-2xl p-6 mb-6 border ${risk.border} relative overflow-hidden shadow-2xl`}>
@@ -183,49 +343,49 @@ export const PredictionResult: React.FC = () => {
             <div>
               <div className="flex items-center gap-3 flex-wrap mb-1">
                 <h1 className="text-xl font-extrabold tracking-tight text-white font-sans">
-                  {data.repositoryName ?? 'Repository'}
+                  {repoNameVal ?? 'Data unavailable'}
                 </h1>
                 <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase font-mono ${risk.bg} ${risk.text} border ${risk.border}`}>
-                  {data.riskLevel ?? 'UNKNOWN'} RISK
+                  {riskLevelVal ? `${riskLevelVal} RISK` : 'Data unavailable'}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase">
-                  {data.predictionStatus ?? 'COMPLETED'}
+                  {predStatusVal ?? 'COMPLETED'}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-                {data.repositoryUrl && (
-                  <a href={data.repositoryUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-cyan-400 transition-colors">
-                    <Globe size={11} /> {data.repositoryUrl}
+                {repoUrlVal && (
+                  <a href={repoUrlVal} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-cyan-400 transition-colors break-all max-w-full sm:max-w-md truncate">
+                    <Globe size={11} className="shrink-0" /> <span className="truncate">{repoUrlVal}</span>
                   </a>
                 )}
                 {data.organization && (
                   <span className="flex items-center gap-1 text-[11px] text-slate-400">
-                    <GitBranch size={11} /> {data.organization}
+                    <GitBranch size={11} className="shrink-0" /> {data.organization}
                   </span>
                 )}
                 {data.language && (
                   <span className="text-[11px] text-slate-400 font-mono">{data.language}</span>
                 )}
                 <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                  <Clock size={10} /> {formatDate(data.createdAt as any)}
+                  <Clock size={10} className="shrink-0" /> {formatDate(createdAtVal)}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto mt-2 md:mt-0">
             <button
               onClick={() => navigate('/prediction/run')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-all"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-all cursor-pointer"
             >
-              <ArrowLeft size={13} /> New Prediction
+              <ArrowLeft size={13} /> <span className="hidden xs:inline">New Prediction</span>
             </button>
             <button
               onClick={handleDownloadPdf}
               disabled={pdfMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-all disabled:opacity-50"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-all disabled:opacity-50 cursor-pointer"
             >
               {pdfMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
               PDF
@@ -233,7 +393,7 @@ export const PredictionResult: React.FC = () => {
             <button
               onClick={handleDownloadExcel}
               disabled={excelMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-900/40 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-900/60 transition-all disabled:opacity-50"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-900/40 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-900/60 transition-all disabled:opacity-50 cursor-pointer"
             >
               {excelMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
               Excel
@@ -247,28 +407,28 @@ export const PredictionResult: React.FC = () => {
         {[
           {
             label: 'Failure Probability',
-            value: `${failPct}%`,
+            value: failPct != null ? `${failPct}%` : 'Data unavailable',
             sub: 'ML Ensemble',
-            color: data.failureProbability! >= 0.5 ? 'text-rose-400' : 'text-amber-400',
-            icon: <AlertTriangle size={14} className={data.failureProbability! >= 0.5 ? 'text-rose-400' : 'text-amber-400'} />,
+            color: (failureProbVal ?? 0) >= 0.5 ? 'text-rose-400' : 'text-amber-400',
+            icon: <AlertTriangle size={14} className={(failureProbVal ?? 0) >= 0.5 ? 'text-rose-400' : 'text-amber-400'} />,
           },
           {
             label: 'Risk Score',
-            value: `${data.riskScore ?? 0}`,
+            value: riskScoreVal != null ? `${riskScoreVal}` : 'Data unavailable',
             sub: 'Out of 100',
             color: risk.text,
             icon: <ShieldAlert size={14} className={risk.text} />,
           },
           {
             label: 'AI Confidence',
-            value: `${confidencePct}%`,
+            value: confidencePct != null ? `${confidencePct}%` : 'Data unavailable',
             sub: 'SHAP Verified',
             color: 'text-blue-400',
             icon: <Brain size={14} className="text-blue-400" />,
           },
           {
             label: 'Health Score',
-            value: `${healthPct}`,
+            value: healthPct != null ? `${healthPct}` : 'Data unavailable',
             sub: 'Project Vitality',
             color: 'text-emerald-400',
             icon: <CheckCircle2 size={14} className="text-emerald-400" />,
@@ -299,18 +459,18 @@ export const PredictionResult: React.FC = () => {
           <div className="mb-4">
             <div className="flex justify-between text-[10px] font-mono text-slate-400 mb-2">
               <span>0%</span>
-              <span className={`font-bold text-sm ${risk.text}`}>{failPct}% Failure Probability</span>
+              <span className={`font-bold text-sm ${risk.text}`}>{failPct != null ? `${failPct}% Failure Probability` : 'Data unavailable'}</span>
               <span>100%</span>
             </div>
             <div className="h-4 rounded-full bg-slate-800 overflow-hidden relative">
               <div
                 className={`h-full rounded-full transition-all duration-1000 ease-out relative ${
-                  data.failureProbability! >= 0.75 ? 'bg-gradient-to-r from-red-600 to-rose-500' :
-                  data.failureProbability! >= 0.50 ? 'bg-gradient-to-r from-orange-500 to-amber-500' :
-                  data.failureProbability! >= 0.25 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
+                  (failureProbVal ?? 0) >= 0.75 ? 'bg-gradient-to-r from-red-600 to-rose-500' :
+                  (failureProbVal ?? 0) >= 0.50 ? 'bg-gradient-to-r from-orange-500 to-amber-500' :
+                  (failureProbVal ?? 0) >= 0.25 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
                   'bg-gradient-to-r from-emerald-500 to-green-400'
                 }`}
-                style={{ width: `${(data.failureProbability ?? 0) * 100}%` }}
+                style={{ width: `${(failureProbVal ?? 0) * 100}%` }}
               >
                 <div className="absolute inset-0 bg-white/10 animate-pulse" />
               </div>
@@ -320,10 +480,10 @@ export const PredictionResult: React.FC = () => {
           {/* Risk zones legend */}
           <div className="grid grid-cols-4 gap-1.5">
             {[
-              { label: 'LOW',      range: '0–25%',   color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', active: (data.failureProbability ?? 0) < 0.25 },
-              { label: 'MEDIUM',   range: '25–50%',  color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',     active: (data.failureProbability ?? 0) >= 0.25 && (data.failureProbability ?? 0) < 0.50 },
-              { label: 'HIGH',     range: '50–75%',  color: 'text-orange-400',  bg: 'bg-orange-500/10 border-orange-500/20',   active: (data.failureProbability ?? 0) >= 0.50 && (data.failureProbability ?? 0) < 0.75 },
-              { label: 'CRITICAL', range: '75–100%', color: 'text-rose-400',    bg: 'bg-rose-500/10 border-rose-500/20',       active: (data.failureProbability ?? 0) >= 0.75 },
+              { label: 'LOW',      range: '0–25%',   color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', active: (failureProbVal ?? 0) < 0.25 },
+              { label: 'MEDIUM',   range: '25–50%',  color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',     active: (failureProbVal ?? 0) >= 0.25 && (failureProbVal ?? 0) < 0.50 },
+              { label: 'HIGH',     range: '50–75%',  color: 'text-orange-400',  bg: 'bg-orange-500/10 border-orange-500/20',   active: (failureProbVal ?? 0) >= 0.50 && (failureProbVal ?? 0) < 0.75 },
+              { label: 'CRITICAL', range: '75–100%', color: 'text-rose-400',    bg: 'bg-rose-500/10 border-rose-500/20',       active: (failureProbVal ?? 0) >= 0.75 },
             ].map((zone) => (
               <div key={zone.label} className={`p-2 rounded-xl border text-center transition-all ${zone.bg} ${zone.active ? 'opacity-100 shadow-sm' : 'opacity-40'}`}>
                 <span className={`block text-[9px] font-bold uppercase ${zone.color}`}>{zone.label}</span>
@@ -335,7 +495,7 @@ export const PredictionResult: React.FC = () => {
           {/* Model info */}
           <div className="mt-4 p-3 bg-slate-900/40 border border-white/[0.04] rounded-xl flex items-center justify-between">
             <span className="text-[10px] text-slate-400">Model Version</span>
-            <span className="text-[10px] font-mono text-cyan-400 font-bold">{data.modelVersion ?? 'graveyard-ml-v1.0'}</span>
+            <span className="text-[10px] font-mono text-cyan-400 font-bold">{modelVerVal ?? 'Data unavailable'}</span>
           </div>
         </div>
 
@@ -356,7 +516,7 @@ export const PredictionResult: React.FC = () => {
             <div className="space-y-3">
               {features.slice(0, 8).map((f, i) => {
                 const pct = Math.abs(f.impact) / maxImpact * 100;
-                const increases = f.direction === 'increases_risk';
+                const increases = f.direction.includes('increase') || f.direction.includes('increasing');
                 return (
                   <div key={i} className="space-y-1">
                     <div className="flex items-center justify-between text-[11px]">
@@ -384,15 +544,171 @@ export const PredictionResult: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Recommendations ─────────────────────────────────────────────────── */}
-      {recommendations.length > 0 && (
+      {/* ── AI Recommendations ───────────────────────────────────────────────── */}
+      {richRecommendations && richRecommendations.recommendations.length > 0 ? (
+        <div className="mb-6 space-y-4">
+          {/* Header row */}
+          <div className="flex items-center gap-2">
+            <Zap size={15} className="text-cyan-400" />
+            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-wider">AI Recommendations</h2>
+            <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+              {richRecommendations.recommendations.length} actions identified
+            </span>
+          </div>
+
+          {/* Recommendation Cards */}
+          <div className="space-y-3">
+            {richRecommendations.recommendations.map((rec, i) => {
+              const pStyle = getPriorityStyle(rec.suggested_priority);
+              const isExpanded = expandedRec === i;
+              return (
+                <div
+                  key={i}
+                  className={`glass-strong rounded-2xl border border-white/[0.08] overflow-hidden transition-all duration-200 ${
+                    isExpanded ? 'border-cyan-500/20 shadow-lg shadow-cyan-500/5' : 'hover:border-white/[0.12]'
+                  }`}
+                >
+                  {/* Card Header — always visible */}
+                  <button
+                    onClick={() => setExpandedRec(isExpanded ? null : i)}
+                    className="w-full flex items-start gap-3 p-4 text-left"
+                  >
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${pStyle.dot}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase ${pStyle.badge}`}>
+                          {pStyle.label}
+                        </span>
+                        <span className="text-xs font-semibold text-white truncate">{rec.title}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">{rec.risk_detected}</p>
+                    </div>
+                    <ChevronDown
+                      size={14}
+                      className={`text-slate-500 shrink-0 mt-0.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-0 border-t border-white/[0.05] space-y-3">
+                      {rec.current_condition && (
+                        <div className="mt-3 p-3 rounded-xl bg-slate-900/50 border border-white/[0.04]">
+                          <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Current Condition</span>
+                          <p className="text-xs text-slate-300">{rec.current_condition}</p>
+                        </div>
+                      )}
+                      <div className="p-3 rounded-xl bg-cyan-900/20 border border-cyan-500/15">
+                        <span className="block text-[9px] font-bold uppercase tracking-wider text-cyan-500 mb-1">Recommended Action</span>
+                        <p className="text-xs text-slate-200">{rec.recommended_action}</p>
+                      </div>
+                      {rec.why_it_matters && (
+                        <div className="p-3 rounded-xl bg-slate-900/40 border border-white/[0.04]">
+                          <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Why It Matters</span>
+                          <p className="text-xs text-slate-300 leading-relaxed">{rec.why_it_matters}</p>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="p-2 rounded-xl bg-slate-900/40 border border-white/[0.04] text-center">
+                          <span className="block text-[9px] text-slate-500 mb-1">Impact</span>
+                          <span className={`text-[11px] font-bold ${getImpactStyle(rec.expected_impact)}`}>{rec.expected_impact}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-900/40 border border-white/[0.04] text-center">
+                          <span className="block text-[9px] text-slate-500 mb-1">Effort</span>
+                          <span className={`text-[11px] font-bold ${getEffortStyle(rec.implementation_effort)}`}>{rec.implementation_effort}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-900/40 border border-white/[0.04] text-center">
+                          <span className="block text-[9px] text-slate-500 mb-1">Risk Reduction</span>
+                          <span className="text-[11px] font-bold text-emerald-400">{rec.estimated_risk_reduction}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Risk Reduction Roadmap */}
+          {richRecommendations.roadmap && (
+            <div className="glass-strong rounded-2xl border border-white/[0.08] p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar size={14} className="text-purple-400" />
+                <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Risk Reduction Roadmap</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { key: 'immediate', label: 'Immediate (0–7 days)', color: 'border-rose-500/30 bg-rose-500/5', headingColor: 'text-rose-400' },
+                  { key: 'short_term', label: 'Short Term (1–4 weeks)', color: 'border-amber-500/30 bg-amber-500/5', headingColor: 'text-amber-400' },
+                  { key: 'medium_term', label: 'Medium Term (1–3 months)', color: 'border-emerald-500/30 bg-emerald-500/5', headingColor: 'text-emerald-400' },
+                ].map(({ key, label, color, headingColor }) => {
+                  const items = richRecommendations.roadmap[key as keyof typeof richRecommendations.roadmap] || [];
+                  return (
+                    <div key={key} className={`p-3 rounded-xl border ${color}`}>
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider mb-2 ${headingColor}`}>{label}</span>
+                      {items.length === 0 ? (
+                        <p className="text-[11px] text-slate-500">No actions required</p>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {items.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-1.5">
+                              <ChevronRight size={11} className={`${headingColor} shrink-0 mt-0.5`} />
+                              <span className="text-[11px] text-slate-300 leading-relaxed">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Projected Status After Improvements */}
+          {richRecommendations.projected_status && richRecommendations.projected_status.projected_risk_score != null && (
+            <div className="glass-strong rounded-2xl border border-emerald-500/20 bg-emerald-900/10 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Target size={14} className="text-emerald-400" />
+                <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Projected Status After Improvements</h3>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <span className="block text-[9px] text-slate-500 uppercase tracking-wider mb-1">Current Risk Score</span>
+                  <span className={`text-2xl font-extrabold font-mono ${risk.text}`}>{riskScoreVal ?? '—'}</span>
+                </div>
+                <div className="flex items-center justify-center">
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <TrendingDown size={20} />
+                    <span className="text-sm font-bold">
+                      {richRecommendations.projected_status.potential_improvement}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <span className="block text-[9px] text-slate-500 uppercase tracking-wider mb-1">Projected Risk Score</span>
+                  <span className="text-2xl font-extrabold font-mono text-emerald-400">
+                    {richRecommendations.projected_status.projected_risk_score}
+                  </span>
+                  <span className={`block text-[10px] font-bold mt-0.5 ${
+                    getRiskColor(richRecommendations.projected_status.projected_risk_level).text
+                  }`}>
+                    {richRecommendations.projected_status.projected_risk_level}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : legacyRecommendations.length > 0 ? (
+        // Legacy flat string list fallback
         <div className="glass-strong rounded-2xl border border-white/[0.08] p-5 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={15} className="text-cyan-400" />
             <h2 className="text-xs font-bold text-slate-200 uppercase tracking-wider">AI Recommendations</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {recommendations.map((rec, i) => (
+            {legacyRecommendations.map((rec, i) => (
               <div key={i} className="flex items-start gap-2.5 p-3 bg-slate-900/40 border border-white/[0.05] rounded-xl">
                 <ChevronRight size={13} className="text-cyan-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-slate-300 leading-relaxed">{rec}</p>
@@ -400,7 +716,13 @@ export const PredictionResult: React.FC = () => {
             ))}
           </div>
         </div>
-      )}
+      ) : recsJsonRaw ? (
+        // Data present but not parseable yet
+        <div className="glass-strong rounded-2xl border border-white/[0.08] p-5 mb-6 flex items-center gap-3">
+          <Loader2 size={14} className="text-cyan-400 animate-spin" />
+          <p className="text-xs text-slate-400">Analyzing repository risks and generating AI recommendations…</p>
+        </div>
+      ) : null}
 
       {/* ── Repository Metadata ─────────────────────────────────────────────── */}
       <div className="glass-strong rounded-2xl border border-white/[0.08] p-5 mb-6">
@@ -410,14 +732,14 @@ export const PredictionResult: React.FC = () => {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Repository ID',  value: data.repositoryId?.toString() ?? 'N/A', mono: true },
-            { label: 'Prediction ID',  value: data.predictionId?.toString() ?? 'N/A', mono: true },
-            { label: 'Git Provider',   value: data.gitProvider ?? 'GitHub' },
-            { label: 'Branch',         value: data.branch ?? 'main', mono: true },
-            { label: 'Visibility',     value: data.visibility ?? 'N/A' },
-            { label: 'Language',       value: data.language ?? 'N/A' },
-            { label: 'Triggered By',   value: data.triggeredBy ?? 'MANUAL' },
-            { label: 'Predicted At',   value: formatDate(data.createdAt as any) },
+            { label: 'Repository ID',  value: repoIdVal ? String(repoIdVal) : 'Data unavailable', mono: true },
+            { label: 'Prediction ID',  value: predIdVal ? String(predIdVal) : 'Data unavailable', mono: true },
+            { label: 'Git Provider',   value: gitProviderVal ?? 'Data unavailable' },
+            { label: 'Branch',         value: data.branch ?? 'Data unavailable', mono: true },
+            { label: 'Visibility',     value: data.visibility ?? 'Data unavailable' },
+            { label: 'Language',       value: data.language ?? 'Data unavailable' },
+            { label: 'Triggered By',   value: triggeredByVal ?? 'Data unavailable' },
+            { label: 'Predicted At',   value: formatDate(createdAtVal) },
           ].map((item) => (
             <div key={item.label} className="p-3 bg-slate-900/40 border border-white/[0.05] rounded-xl">
               <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">{item.label}</span>

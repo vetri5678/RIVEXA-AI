@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import authApi from '../api/auth';
 import {
-  ShieldCheck,
   Key,
   Mail,
   RefreshCw,
@@ -12,8 +11,8 @@ import {
   Eye,
   EyeOff,
   Clock,
-  RotateCcw,
-} from 'lucide-react';
+  RotateCcw } from 'lucide-react';
+import { RivexaLogo } from '../components/common/RivexaLogo';
 
 export const ResetPassword: React.FC = () => {
   const [step, setStep] = useState<'request' | 'verify'>('request');
@@ -204,13 +203,7 @@ export const ResetPassword: React.FC = () => {
         transition={{ duration: 0.3 }}
         className="w-full max-w-md z-10"
       >
-        <div className="flex flex-col items-center mb-8">
-          <div className="p-3 bg-blue-600/10 border border-blue-500/20 rounded-xl text-blue-400 mb-3 shadow-sm">
-            <ShieldCheck size={32} />
-          </div>
-          <h1 className="text-xl font-bold text-slate-100 tracking-tight text-center">
-            RiskVision AI
-          </h1>
+        <div className="flex flex-col items-center mb-8">            <RivexaLogo variant="compact" size={34} alt="RIVEXA" />
           <p className="text-xs text-slate-400 font-medium tracking-wide mt-1">
             Secure OTP Password Reset
           </p>

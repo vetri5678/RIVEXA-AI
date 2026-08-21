@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { X, Check, Loader2, Key, Settings } from 'lucide-react';
 import { useCreateRepository, useValidateToken } from '../../hooks/useRepository';
 import type { RepositoryCreateRequest, GitProvider, Visibility, PredictionFrequency } from '../../types/repository';
@@ -189,7 +189,7 @@ export const AddRepositoryWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                   <input
                     type="text"
                     className="glass-input w-full"
-                    placeholder="riskvision-ai"
+                    placeholder="rivexa-ai"
                     value={form.organization || ''}
                     onChange={e => handleChange({ organization: e.target.value })}
                   />

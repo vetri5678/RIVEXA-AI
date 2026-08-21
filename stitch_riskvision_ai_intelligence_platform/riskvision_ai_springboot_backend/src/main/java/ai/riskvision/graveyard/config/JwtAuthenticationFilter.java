@@ -40,6 +40,37 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final CustomUserDetailsService userDetailsService;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getServletPath();
+        if (path == null || path.isEmpty()) {
+            path = request.getRequestURI();
+        }
+        return path.equals("/api/v1/auth/login")
+                || path.equals("/api/v1/auth/register")
+                || path.equals("/api/v1/auth/refresh")
+                || path.equals("/api/v1/auth/logout")
+                || path.equals("/api/v1/auth/verify-email")
+                || path.equals("/api/v1/auth/resend-verification")
+                || path.startsWith("/api/v1/auth/password-reset")
+                || path.startsWith("/api/v1/auth/github")
+                || path.startsWith("/api/v1/auth/oauth2")
+                || path.startsWith("/api/v1/oauth2")
+                || path.startsWith("/login/oauth2")
+                || path.startsWith("/oauth2")
+                || path.equals("/api/v1/health")
+                || path.equals("/api/github/health")
+                || path.equals("/api/v1/github/health")
+                || path.startsWith("/api/v1/pipeline")
+                || path.startsWith("/ws/")
+                || path.startsWith("/swagger-ui")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/assets/")
+                || path.startsWith("/static/")
+                || path.equals("/favicon.ico")
+                || path.equals("/error");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain)
@@ -70,10 +101,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // User deleted after token was issued — do not set authentication
                 log.warn("JWT token valid but user not found (may have been deleted): {}",
                     e.getMessage());
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 // Never propagate — just skip authentication for this request
-                log.debug("JWT filter error for request {}: {}", request.getRequestURI(),
-                    e.getMessage());
+                log.error("JWT filter error for request {}: {}", request.getRequestURI(),
+                    e.getMessage(), e);
             }
         }
 

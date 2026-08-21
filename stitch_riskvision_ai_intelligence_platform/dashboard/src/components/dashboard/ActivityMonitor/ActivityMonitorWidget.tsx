@@ -6,16 +6,17 @@ import { Cpu, HardDrive, Activity, Zap, Database, Server, Wifi, RefreshCw, Alert
 export const ActivityMonitorWidget: React.FC = () => {
   const { data: telemetry, isLoading, isError, refetch } = useTelemetryCurrent();
 
-  const cpu = telemetry?.cpu_usage !== undefined ? `${Number(telemetry.cpu_usage).toFixed(1)}%` : '12.4%';
-  const ram = telemetry?.memory_usage !== undefined ? `${Number(telemetry.memory_usage).toFixed(1)}%` : '42.8%';
-  const heap = telemetry?.heap_usage !== undefined ? `${Number(telemetry.heap_usage).toFixed(1)}%` : '31.5%';
-  const threads = telemetry?.thread_count !== undefined ? `${telemetry.thread_count}` : '42';
-  const latency = telemetry?.api_latency !== undefined ? `${telemetry.api_latency}ms` : '14ms';
-  const disk = telemetry?.disk_usage !== undefined ? `${Number(telemetry.disk_usage).toFixed(1)}%` : '58.2%';
-  const dbConns = telemetry?.active_sessions !== undefined ? `${telemetry.active_sessions}` : '8';
-  const network = telemetry?.network_usage !== undefined ? `${Number(telemetry.network_usage).toFixed(1)} MB/s` : '12.4 MB/s';
-  const requestRate = telemetry?.request_rate !== undefined ? `${telemetry.request_rate} req/s` : '85 req/s';
-  const errorRate = telemetry?.error_rate !== undefined ? `${Number(telemetry.error_rate).toFixed(2)}%` : '0.02%';
+  const cpu = telemetry?.cpu_usage !== undefined ? `${Number(telemetry.cpu_usage).toFixed(1)}%` : (isLoading ? '...' : '—');
+  const ram = telemetry?.memory_usage !== undefined ? `${Number(telemetry.memory_usage).toFixed(1)}%` : (isLoading ? '...' : '—');
+  const heap = telemetry?.heap_usage !== undefined ? `${Number(telemetry.heap_usage).toFixed(1)}%` : (isLoading ? '...' : '—');
+  const threads = telemetry?.thread_count !== undefined ? `${telemetry.thread_count}` : (isLoading ? '...' : '—');
+  const latency = telemetry?.api_latency !== undefined ? `${telemetry.api_latency}ms` : (isLoading ? '...' : '—');
+  const disk = telemetry?.disk_usage !== undefined ? `${Number(telemetry.disk_usage).toFixed(1)}%` : (isLoading ? '...' : '—');
+  const dbConns = telemetry?.active_sessions !== undefined ? `${telemetry.active_sessions}` : (isLoading ? '...' : '—');
+  const network = telemetry?.network_usage !== undefined ? `${Number(telemetry.network_usage).toFixed(1)} MB/s` : (isLoading ? '...' : '—');
+  const requestRate = telemetry?.request_rate !== undefined ? `${telemetry.request_rate} req/s` : (isLoading ? '...' : '—');
+  const errorRate = telemetry?.error_rate !== undefined ? `${Number(telemetry.error_rate).toFixed(2)}%` : (isLoading ? '...' : '—');
+
 
   const metrics = [
     { label: 'CPU Usage', value: cpu, icon: Cpu, color: 'text-cyan-400' },

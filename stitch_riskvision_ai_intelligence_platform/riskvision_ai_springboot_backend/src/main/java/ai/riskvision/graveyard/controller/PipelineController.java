@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+import ai.riskvision.graveyard.service.DashboardService;
+
 @RestController
 @RequestMapping("/api/v1/pipeline")
 @CrossOrigin(origins = "*")
@@ -18,6 +20,7 @@ import java.util.Map;
 public class PipelineController {
 
     private final PipelineService pipelineService;
+    private final DashboardService dashboardService;
 
     @GetMapping("/status")
     public ResponseEntity<?> getStatus() {
@@ -61,13 +64,14 @@ public class PipelineController {
     @GetMapping("/evaluation")
     public ResponseEntity<?> getEvaluation() {
         log.debug("HTTP GET /api/v1/pipeline/evaluation received");
+        Map<String, Object> modelInfo = dashboardService.getModelInfo();
         return ResponseEntity.ok(Map.of(
-                "f1_score", 0.915,
-                "accuracy", 0.942,
-                "precision", 0.928,
-                "recall", 0.903,
-                "roc_auc", 0.965,
-                "evaluation_date", LocalDateTime.now()
+                "f1_score", modelInfo.getOrDefault("f1_score", "Unavailable"),
+                "accuracy", modelInfo.getOrDefault("accuracy", "Unavailable"),
+                "precision", modelInfo.getOrDefault("precision", "Unavailable"),
+                "recall", modelInfo.getOrDefault("recall", "Unavailable"),
+                "roc_auc", modelInfo.getOrDefault("roc_auc", "Unavailable"),
+                "evaluation_date", modelInfo.getOrDefault("training_date", LocalDateTime.now().toString())
         ));
     }
 

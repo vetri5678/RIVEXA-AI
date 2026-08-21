@@ -50,6 +50,45 @@ export interface Repository {
   updatedAt: string;
 }
 
+export interface DownloadReportRequest {
+  id: string;
+  format: 'PDF' | 'EXCEL';
+}
+
+// ─── Live GitHub Repository Types ──────────────────────────────────────────────
+
+export interface GithubRepository {
+  id: number;
+  node_id: string;
+  name: string;
+  full_name: string;
+  owner: string;
+  owner_avatar_url: string | null;
+  html_url: string;
+  clone_url: string;
+  ssh_url: string | null;
+  default_branch: string;
+  private: boolean;
+  visibility: string;
+  description: string | null;
+  language: string | null;
+  updated_at: string | null;
+  stargazers_count: number | null;
+  forks_count: number | null;
+}
+
+export interface GithubUserReposResponse {
+  success: boolean;
+  repositories: GithubRepository[];
+  total: number;
+  pagination?: {
+    page: number;
+    per_page: number;
+    has_next: boolean;
+  };
+  error?: string;
+}
+
 export interface RepositoryMetrics {
   id: string;
   repositoryId: string;
@@ -109,7 +148,7 @@ export interface RepositoryDetail extends Repository {
 
 export interface RepositorySummary {
   id: string;
-  repositoryName: string;
+  repositoryName: string | null;   // nullable — backend DTO has no @NotNull guarantee
   organization: string | null;
   description: string | null;
   technology: string | null;

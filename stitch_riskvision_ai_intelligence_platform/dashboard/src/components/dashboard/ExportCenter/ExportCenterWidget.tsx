@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import WidgetWrapper from '../Common/WidgetWrapper';
 import dashboardApi from '../../../api/dashboard';
-import { apiClient } from '../../../api/client';
+import { downloadFile } from '../../../utils/downloadUtils';
 import { FileDown, FileSpreadsheet, FileJson } from 'lucide-react';
 
 export const ExportCenterWidget: React.FC = () => {
@@ -11,17 +11,10 @@ export const ExportCenterWidget: React.FC = () => {
     setExporting(true);
     try {
       if (format === 'pdf' || format === 'excel') {
-        const response = await apiClient.get(`/reports/download/${format}`, {
-          responseType: 'blob',
+        await downloadFile({
+          url: `/reports/download/${format}`,
+          defaultFilename: `rivexa_portfolio_report.${format === 'pdf' ? 'pdf' : 'xlsx'}`,
         });
-        const url = window.URL.createObjectURL(response.data);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `riskvision_portfolio_report.${format === 'pdf' ? 'pdf' : 'xlsx'}`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
       } else {
         const res = await dashboardApi.exportReport({
           format,
@@ -31,7 +24,7 @@ export const ExportCenterWidget: React.FC = () => {
       }
     } catch (err: any) {
       console.error('[ExportCenterWidget] Export failed:', err);
-      const errMsg = err.response?.data?.message || err.message || 'An unexpected error occurred';
+      const errMsg = err.message || 'An unexpected error occurred';
       alert(`Export failed: ${errMsg}`);
     } finally {
       setExporting(false);

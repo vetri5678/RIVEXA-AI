@@ -4,6 +4,7 @@ import ai.riskvision.graveyard.service.AuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -13,9 +14,18 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasRole('ADMIN')")
 public class AuditController {
 
     private final AuditLogService auditLogService;
+
+    @GetMapping("")
+    public ResponseEntity<Map<String, Object>> getAuditLogsRoot(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        log.debug("HTTP GET /api/v1/audit root requested page={}, size={}", page, size);
+        return ResponseEntity.ok(auditLogService.getAuditLogs(page, size));
+    }
 
     @GetMapping("/logs")
     public ResponseEntity<Map<String, Object>> getAuditLogs(

@@ -59,8 +59,8 @@ public class RepositoryControllerTest {
                 .last(true)
                 .build();
 
-        given(repositoryService.findAll(
-                anyInt(), anyInt(), anyString(), anyString(),
+        given(repositoryService.findAllByUser(
+                any(), anyInt(), anyInt(), anyString(), anyString(),
                 any(), any(), any(), any(), any(), any(), any()
         )).willReturn(paged);
 
@@ -84,7 +84,7 @@ public class RepositoryControllerTest {
                 .gitProvider("GITHUB")
                 .build();
 
-        given(repositoryService.create(any(RepositoryCreateRequest.class), anyString())).willReturn(repo);
+        given(repositoryService.createForUser(any(RepositoryCreateRequest.class), anyString())).willReturn(repo);
 
         mockMvc.perform(post("/api/v1/repositories")
                         .contentType(MediaType.APPLICATION_JSON)

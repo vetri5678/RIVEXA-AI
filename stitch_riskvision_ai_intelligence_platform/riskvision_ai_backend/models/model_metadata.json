@@ -1,10 +1,11 @@
 {
-  "model_name": "random_forest",
-  "model_class": "RandomForestClassifier",
-  "version": "1.0.0",
+  "model_name": "XGBoost",
+  "model_class": "XGBClassifier",
+  "version": "xgboost-v1.0",
+  "model_version": "xgboost-v1.0",
   "status": "READY",
-  "trained_at": "2026-07-28T10:43:04.509513+00:00",
-  "dataset_path": "D:\\stitch_riskvision_ai_intelligence_platform project\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\data\\project_risk.csv",
+  "trained_at": "2026-08-12T05:39:13.815271+00:00",
+  "dataset_path": "data\\project_risk.csv",
   "dataset_records": 20000,
   "feature_count": 14,
   "feature_names": [
@@ -34,58 +35,78 @@
     "MEDIUM"
   ],
   "hyperparameters": {
-    "n_estimators": 120,
-    "max_depth": 12,
-    "min_samples_split": 4,
+    "n_estimators": 200,
+    "learning_rate": 0.05,
+    "max_depth": 6,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "multi:softprob",
+    "eval_metric": "mlogloss",
     "random_state": 42
   },
   "metrics": {
-    "accuracy": 0.9223,
-    "precision": 0.9088,
-    "recall": 0.9223,
-    "f1_score": 0.9131,
-    "roc_auc": 0.9565,
-    "cross_val_mean": 0.9187,
-    "cross_val_std": 0.0018,
+    "accuracy": 0.9313,
+    "precision": 0.9254,
+    "recall": 0.9313,
+    "f1_score": 0.9274,
+    "roc_auc": 0.9632,
+    "cross_val_mean": 0.9285,
+    "cross_val_std": 0.0005,
     "confusion_matrix": [
       [
-        3486,
+        3463,
         0,
-        68
+        91
       ],
       [
+        1,
         2,
-        0,
-        21
+        20
       ],
       [
-        220,
-        0,
-        203
+        160,
+        3,
+        260
       ]
     ]
   },
+  "benchmark_comparison": {
+    "random_forest": {
+      "accuracy": 0.9215,
+      "precision": 0.9083,
+      "recall": 0.9215,
+      "f1_score": 0.9128,
+      "roc_auc": 0.9572
+    },
+    "xgboost": {
+      "accuracy": 0.9313,
+      "precision": 0.9254,
+      "recall": 0.9313,
+      "f1_score": 0.9274,
+      "roc_auc": 0.9632
+    }
+  },
   "feature_importance": {
-    "Project Budget": 0.05481805078593496,
-    "Actual Cost": 0.06630707486820292,
-    "Schedule Delay": 0.2754380891162196,
-    "Team Size": 0.03370437999817507,
-    "Open Issues": 0.03058226958693152,
-    "Critical Bugs": 0.05591001321647534,
-    "Completion %": 0.04097935949418099,
-    "Priority": 0.011379595590265778,
-    "Department": 0.015221339940206432,
-    "Project Type": 0.014696297870853164,
-    "Actual Duration": 0.10125490792746854,
-    "Estimated Duration": 0.06742735359866127,
-    "Customer Satisfaction": 0.06678645135281132,
-    "Technical Debt": 0.16549481665361315
+    "Project Budget": 0.045483291149139404,
+    "Actual Cost": 0.05219367519021034,
+    "Schedule Delay": 0.38522815704345703,
+    "Team Size": 0.024151084944605827,
+    "Open Issues": 0.02329358085989952,
+    "Critical Bugs": 0.08357418328523636,
+    "Completion %": 0.025554055348038673,
+    "Priority": 0.02456814981997013,
+    "Department": 0.024820450693368912,
+    "Project Type": 0.02462093159556389,
+    "Actual Duration": 0.08672674000263214,
+    "Estimated Duration": 0.0429869145154953,
+    "Customer Satisfaction": 0.04895206168293953,
+    "Technical Debt": 0.10784672200679779
   },
   "artifact_paths": {
-    "model_canonical": "D:\\stitch_riskvision_ai_intelligence_platform project\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\models\\random_forest.joblib",
-    "model_versioned": "D:\\stitch_riskvision_ai_intelligence_platform project\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\models\\random_forest_20260728_104304.joblib",
-    "encoders": "D:\\stitch_riskvision_ai_intelligence_platform project\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\models\\encoders.joblib",
+    "model_canonical": "models\\xgboost_model.joblib",
+    "model_versioned": "models\\xgboost_model_20260812_053913.joblib",
+    "encoders": "models\\encoders.joblib",
     "transformer_canonical": "D:\\stitch_riskvision_ai_intelligence_platform project\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\transformers\\transformer_bundle.joblib",
-    "transformer_versioned": "D:\\stitch_riskvision_ai_intelligence_platform project\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\transformers\\transformer_bundle_20260728_104304.joblib"
+    "transformer_versioned": "D:\\stitch_riskvision_ai_intelligence_platform project\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\transformers\\transformer_bundle_20260812_053913.joblib"
   }
 }

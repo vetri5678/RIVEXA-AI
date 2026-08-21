@@ -26,23 +26,34 @@ public class HealthController {
         long startTime = System.currentTimeMillis();
         log.debug("HTTP GET /api/v1/health requested");
 
-        String dbStatus = "CONNECTED";
+        String dbStatus = "UNKNOWN";
+        boolean dbHealthy = false;
+        
         try {
+            // Test database connectivity with timeout
             userRepository.count();
+            dbStatus = "CONNECTED";
+            dbHealthy = true;
+            log.debug("Database health check: PASSED");
         } catch (Exception e) {
-            log.error("Database ping failed during health check: {}", e.getMessage());
+            log.warn("Database health check: FAILED - {}", e.getMessage());
             dbStatus = "DISCONNECTED";
+            dbHealthy = false;
         }
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", "UP");
+        response.put("service", "Spring Boot Backend");
         response.put("database", dbStatus);
         response.put("pipeline", "RUNNING");
+        response.put("healthy", dbHealthy);
         response.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
 
         long duration = System.currentTimeMillis() - startTime;
-        log.info("HTTP GET /api/v1/health completed in {} ms -> {}", duration, dbStatus);
+        log.info("HTTP GET /api/v1/health completed in {} ms -> DB:{}", duration, dbStatus);
 
+        // Always return HTTP 200 for service health, even if DB is down
+        // This allows the service to be considered "up" for load balancer purposes
         return ResponseEntity.ok(response);
     }
 }

@@ -28,4 +28,10 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
     );
 
     long countByOwnerUuidOrOwner(UserEntity ownerUuid, UserEntity owner);
+
+    @Query("SELECT p.externalId FROM ProjectEntity p WHERE p.ownerUuid = :owner OR p.owner = :owner")
+    java.util.List<String> findExternalIdsByOwner(@Param("owner") UserEntity owner);
+
+    @Query("SELECT COUNT(p) > 0 FROM ProjectEntity p WHERE p.externalId = :externalId AND (p.ownerUuid = :owner OR p.owner = :owner)")
+    boolean existsByExternalIdAndOwner(@Param("externalId") String externalId, @Param("owner") UserEntity owner);
 }

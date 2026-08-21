@@ -12,6 +12,7 @@ import java.util.UUID;
 public class RepositorySummaryResponse {
 
     private UUID id;
+    @com.fasterxml.jackson.annotation.JsonProperty("repository_name")
     private String repositoryName;
     private String organization;
     private String description;

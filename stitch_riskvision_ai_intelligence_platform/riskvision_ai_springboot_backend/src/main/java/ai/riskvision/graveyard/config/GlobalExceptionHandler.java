@@ -110,14 +110,26 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Catch-all for any other unhandled exceptions.
+     * Handle Spring ResponseStatusException.
      */
-    @ExceptionHandler(Exception.class)
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatusException(
+            org.springframework.web.server.ResponseStatusException ex, WebRequest request) {
+        log.warn("Response status exception [{}]: {}", ex.getStatusCode(), ex.getReason());
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        String msg = ex.getReason() != null ? ex.getReason() : ex.getMessage();
+        return buildErrorResponse(status, msg, request);
+    }
+
+    /**
+     * Catch-all for any other unhandled exceptions or errors.
+     */
+    @ExceptionHandler(Throwable.class)
     public ResponseEntity<Map<String, Object>> handleAllExceptions(
-            Exception ex, WebRequest request) {
-        log.error("Unhandled exception: ", ex);
-        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
-                "An unexpected error occurred. Please try again later.", request);
+            Throwable ex, WebRequest request) {
+        log.error("Unhandled exception or error: ", ex);
+        String msg = ex.getMessage() != null ? ex.getMessage() : "An unexpected server error occurred.";
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, msg, request);
     }
 
     private ResponseEntity<Map<String, Object>> buildErrorResponse(

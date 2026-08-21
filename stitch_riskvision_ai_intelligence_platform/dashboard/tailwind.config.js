@@ -10,12 +10,29 @@ export default {
       colors: {
         // ── Primary Surface ──────────────────────────────────
         surface: {
+          DEFAULT: '#07122a',
           base:    '#050816',
           secondary: '#0B1220',
           card:    '#111827',
           raised:  '#101827',
           overlay: '#0D1525',
+          dim: '#07122a',
+          bright: '#2f3952',
         },
+        "surface-container-lowest": "#030d25",
+        "surface-container-low": "#101b33",
+        "surface-container": "#151f37",
+        "surface-container-high": "#1f2942",
+        "surface-container-highest": "#2a344e",
+        "on-surface": "#d9e2ff",
+        "on-surface-variant": "#bac9cc",
+        "outline": "#849396",
+        "outline-variant": "#3b494c",
+        "surface-tint": "#00daf3",
+        "primary": "#c3f5ff",
+        "primary-container": "#00e5ff",
+        "on-primary": "#00363d",
+        "on-primary-container": "#00626e",
         // ── Brand Palette ────────────────────────────────────
         brand: {
           blue:   '#3B82F6',

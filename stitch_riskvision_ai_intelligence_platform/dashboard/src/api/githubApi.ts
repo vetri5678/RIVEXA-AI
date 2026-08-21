@@ -13,7 +13,41 @@ export interface GitHubHealthStatus {
   timestamp: string;
 }
 
+export interface GitHubConnectionStatus {
+  connected: boolean;
+  githubUserId?: string;
+  githubUsername?: string;
+  avatarUrl?: string;
+  connectedAt?: string;
+  repositoryCount?: number;
+  status?: string;
+  lastSyncedAt?: string;
+}
+
+export interface GitHubRepositoriesResponse {
+  connected: boolean;
+  success?: boolean;
+  repositories: any[];
+  total?: number;
+  error?: any;
+}
+
 export const githubApi = {
+  getConnectionStatus: async (): Promise<GitHubConnectionStatus> => {
+    const { data } = await apiClient.get<GitHubConnectionStatus>('/github/connection/status');
+    return data;
+  },
+
+  getRepositories: async (): Promise<GitHubRepositoriesResponse> => {
+    const { data } = await apiClient.get<GitHubRepositoriesResponse>('/github/repositories');
+    return data;
+  },
+
+  disconnectAccount: async (): Promise<{ success: boolean; connected: boolean; message: string; code?: string }> => {
+    const { data } = await apiClient.post<{ success: boolean; connected: boolean; message: string; code?: string }>('/github/disconnect');
+    return data;
+  },
+
   getHealth: async (): Promise<GitHubHealthStatus> => {
     const { data } = await apiClient.get('/github/health');
     return data;

@@ -18,7 +18,7 @@ conn.autocommit = True
 c = conn.cursor()
 
 print("Reading schema SQL file...")
-with open("supabase_schema.sql", "r", encoding="utf-8") as f:
+with open("v4_login_notification_idempotency.sql", "r", encoding="utf-8") as f:
     sql = f.read()
 
 print("Executing schema scripts on Supabase...")

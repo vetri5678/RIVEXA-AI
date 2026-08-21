@@ -38,20 +38,23 @@ def get_active_model(
     return ModelVersionResponse.model_validate(version)
 
 
-@router.post("/train", response_model=RetrainingResponse, summary="Trigger manual model retraining")
+from core.dependencies import get_client_ip, get_current_user_optional
+
+@router.post("/train", response_model=dict, summary="Trigger manual model retraining")
 def trigger_training(
-    payload: RetrainingRequest,
     request: Request,
-    current_user: User = Depends(require_permission(Permission.MODEL_TRAIN)),
+    payload: Optional[RetrainingRequest] = None,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    """Manually trigger model retraining with specified dataset files."""
-    if not payload.file_paths:
-        raise HTTPException(status_code=400, detail="At least one file path is required.")
+    """Manually trigger XGBoost model retraining with optional dataset files."""
+    file_paths = payload.file_paths if (payload and payload.file_paths) else None
+    notes = payload.notes if payload else None
+    user_id = current_user.id if current_user else "system"
     result = RetrainingService.trigger_training(
-        db, payload.file_paths, current_user.id, payload.notes, get_client_ip(request),
+        db, file_paths, user_id, notes, get_client_ip(request),
     )
-    return RetrainingResponse(**result)
+    return result
 
 
 @router.post("/train/upload", response_model=RetrainingResponse, summary="Upload dataset and retrain")

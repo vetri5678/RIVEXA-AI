@@ -28,6 +28,9 @@ class GitHubControllerTest {
     private GitHubClient gitHubClient;
 
     @MockBean
+    private ai.riskvision.graveyard.repository.RepositoryEntityRepository repositoryEntityRepository;
+
+    @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
     @Test

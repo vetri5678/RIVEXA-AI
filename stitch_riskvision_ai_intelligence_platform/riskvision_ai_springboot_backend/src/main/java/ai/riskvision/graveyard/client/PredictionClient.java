@@ -60,6 +60,10 @@ public class PredictionClient {
                     result != null ? result.getRiskScore() : "null");
             return result;
 
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            log.error("[PredictionClient] FastAPI ML service returned error status={} body={} error={}",
+                    e.getStatusCode(), e.getResponseBodyAsString(), e.getMessage(), e);
+            throw new RuntimeException("ML service error: " + e.getStatusCode() + " - " + e.getResponseBodyAsString(), e);
         } catch (RestClientException e) {
             log.error("[PredictionClient] FastAPI ML service unreachable at {}: {}", url, e.getMessage());
             throw new RuntimeException("ML service unavailable: " + e.getMessage(), e);

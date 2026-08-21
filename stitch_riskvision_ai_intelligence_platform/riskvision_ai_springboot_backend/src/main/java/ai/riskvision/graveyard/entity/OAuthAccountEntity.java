@@ -31,6 +31,15 @@ public class OAuthAccountEntity {
     @Column(name = "provider_user_id", nullable = false, length = 255)
     private String providerUserId;
 
+    @Column(name = "access_token", length = 1000)
+    private String accessToken;
+
+    @Column(name = "refresh_token", length = 1000)
+    private String refreshToken;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

@@ -294,5 +294,10 @@ export const dashboardApi = {
     const { data } = await mlApiClient.get('/pipeline/shap');
     return data;
   },
+
+  getLoginHistory: async (page = 0, size = 20): Promise<any> => {
+    const { data } = await apiClient.get('/auth/login-history', { params: { page, size } });
+    return data;
+  },
 };
 export default dashboardApi;

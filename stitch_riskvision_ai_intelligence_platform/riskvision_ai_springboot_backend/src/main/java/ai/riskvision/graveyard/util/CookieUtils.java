@@ -44,14 +44,17 @@ public class CookieUtils {
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
-    @SuppressWarnings("deprecation")
     public static String serialize(Object object) {
         return Base64.getUrlEncoder().encodeToString(SerializationUtils.serialize(object));
     }
 
     @SuppressWarnings("deprecation")
     public static <T> T deserialize(Cookie cookie, Class<T> cls) {
-        byte[] bytes = Base64.getUrlDecoder().decode(cookie.getValue());
-        return cls.cast(SerializationUtils.deserialize(bytes));
+        try {
+            byte[] bytes = Base64.getUrlDecoder().decode(cookie.getValue());
+            return cls.cast(SerializationUtils.deserialize(bytes));
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

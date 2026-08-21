@@ -62,7 +62,7 @@ export const RiskDistributionWidget: React.FC = () => {
             <div key={slice.level} className="flex items-center justify-between border-b border-slate-900 pb-1">
               <div className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: slice.color }} />
-                <span className="text-slate-400 capitalize">{slice.level.toLowerCase()}</span>
+                <span className="text-slate-400 capitalize">{(slice.level ?? '').toLowerCase()}</span>
               </div>
               <div className="text-right">
                 <span className="text-slate-200 font-bold block">{slice.count}</span>

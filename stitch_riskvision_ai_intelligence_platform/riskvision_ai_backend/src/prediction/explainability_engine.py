@@ -146,6 +146,23 @@ class ExplainabilityEngineStage(PipelineStage):
     # SHAP Explanations
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _to_float(val, default: float = 0.5) -> float:
+        """Safely converts numpy scalars, 0D, 1D, or multi-class arrays into a Python float."""
+        if val is None:
+            return default
+        if isinstance(val, (np.ndarray, list, tuple)):
+            arr = np.array(val).ravel()
+            if len(arr) > 1:
+                return float(arr[1])
+            elif len(arr) == 1:
+                return float(arr[0])
+            return default
+        try:
+            return float(val)
+        except Exception:
+            return default
+
     def _compute_shap_values(
         self, model, features: pd.DataFrame, method: str
     ) -> tuple[Optional[np.ndarray], float]:
@@ -174,8 +191,6 @@ class ExplainabilityEngineStage(PipelineStage):
             if hasattr(shap_values_obj, "values"):
                 vals = shap_values_obj.values[0]
                 base_val = getattr(shap_values_obj, "base_values", 0.5)
-                if isinstance(base_val, np.ndarray):
-                    base_val = base_val[0]
             else:
                 # Older SHAP version returns list or array
                 vals = explainer.shap_values(features)
@@ -186,13 +201,12 @@ class ExplainabilityEngineStage(PipelineStage):
                 else:
                     vals = vals[0]
 
-            # If multi-class expected values and values, extract class 1
-            if isinstance(base_val, (list, np.ndarray)) and len(base_val) > 1:
-                base_val = base_val[1]
             if len(vals.shape) > 1 and vals.shape[-1] == 2:
                 vals = vals[:, 1]
+            elif len(vals.shape) > 1 and vals.shape[0] == 1:
+                vals = vals[0]
 
-            return vals, float(base_val)
+            return vals, self._to_float(base_val)
 
         except Exception as exc:
             self.logger.warning("SHAP execution failed: %s. Falling back to feature importance.", exc)
@@ -255,7 +269,7 @@ class ExplainabilityEngineStage(PipelineStage):
         importances = self._compute_feature_importance(model)
         if len(importances) == len(feature_names):
             explanation.feature_importance = {
-                name: float(imp) for name, imp in zip(feature_names, importances)
+                name: self._to_float(imp) for name, imp in zip(feature_names, importances)
             }
 
         # Attempt to compute SHAP values
@@ -266,7 +280,7 @@ class ExplainabilityEngineStage(PipelineStage):
             explanation.explanation_method = "SHAP"
             explanation.shap_base_value = base_val
             explanation.shap_values = {
-                name: float(val) for name, val in zip(feature_names, shap_vals)
+                name: self._to_float(val) for name, val in zip(feature_names, shap_vals)
             }
 
             # Map to contributors
@@ -275,19 +289,20 @@ class ExplainabilityEngineStage(PipelineStage):
             risk_factors = []
 
             for name, val in zip(feature_names, shap_vals):
-                raw_val = float(features_df[name].iloc[0])
+                raw_val = self._to_float(features_df[name].iloc[0])
                 display = self._map_feature_display_names(name)
+                val_flt = self._to_float(val)
                 contrib = FeatureContrib(
                     feature_name=name,
                     display_name=display,
                     value=raw_val,
-                    shap_value=float(val),
+                    shap_value=val_flt,
                 )
 
-                if val > 0:
+                if val_flt > 0:
                     pos_contribs.append(contrib)
                     direction = "INCREASING_RISK"
-                elif val < 0:
+                elif val_flt < 0:
                     neg_contribs.append(contrib)
                     direction = "DECREASING_RISK"
                 else:
@@ -298,7 +313,7 @@ class ExplainabilityEngineStage(PipelineStage):
                         feature_name=name,
                         display_name=display,
                         value=raw_val,
-                        impact=float(val),
+                        impact=val_flt,
                         direction=direction,
                     )
                 )
@@ -319,20 +334,18 @@ class ExplainabilityEngineStage(PipelineStage):
 
             risk_factors = []
             for name, imp in explanation.feature_importance.items():
-                raw_val = float(features_df[name].iloc[0])
+                raw_val = self._to_float(features_df[name].iloc[0])
                 display = self._map_feature_display_names(name)
+                imp_flt = self._to_float(imp)
 
-                # Heuristic: if raw feature is positive, assume it increases/decreases risk
-                # based on general training direction (since we don't have local SHAP).
-                # Keep neutral or general for safety.
-                direction = "INCREASING_RISK" if imp > 0.05 else "NEUTRAL"
+                direction = "INCREASING_RISK" if imp_flt > 0.05 else "NEUTRAL"
 
                 risk_factors.append(
                     RiskFactor(
                         feature_name=name,
                         display_name=display,
                         value=raw_val,
-                        impact=float(imp),
+                        impact=imp_flt,
                         direction=direction,
                     )
                 )

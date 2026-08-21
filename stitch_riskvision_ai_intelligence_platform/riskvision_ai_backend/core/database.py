@@ -3,7 +3,7 @@ SQLAlchemy database engine, session factory, and dependency injection.
 """
 
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -18,11 +18,13 @@ class Base(DeclarativeBase):
 
 
 def _create_engine():
-    connect_args = {}
+    connect_args: dict[str, Any] = {}
     if settings.is_sqlite:
         connect_args = {"check_same_thread": False}
+    else:
+        connect_args = {"connect_timeout": 10}
 
-    engine_kwargs = {
+    engine_kwargs: dict[str, Any] = {
         "echo": settings.db_echo,
         "connect_args": connect_args,
         "pool_pre_ping": True,

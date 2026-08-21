@@ -1,8 +1,7 @@
 package ai.riskvision.graveyard.scheduler;
 
-import ai.riskvision.graveyard.repository.RefreshTokenRepository;
-import ai.riskvision.graveyard.repository.VerificationTokenRepository;
-import ai.riskvision.graveyard.service.RepositorySyncService;
+import ai.riskvision.graveyard.repository.*;
+import ai.riskvision.graveyard.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -39,7 +38,7 @@ public class ScheduledTasks {
     /**
      * Periodic background synchronization of monitored repository telemetry (Hourly).
      */
-    @Scheduled(fixedRate = 3600000)
+    @Scheduled(fixedRate = 3600000, initialDelay = 60000)
     public void syncRepositoryTelemetry() {
         log.info("Triggering scheduled background repository telemetry sync...");
         try {

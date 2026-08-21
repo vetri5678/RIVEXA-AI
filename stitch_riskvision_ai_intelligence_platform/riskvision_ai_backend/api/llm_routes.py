@@ -1,5 +1,5 @@
 """
-RiskVision AI — LLM Telemetry Helper Router
+RIVEXA — LLM Telemetry Helper Router
 
 Provides REST endpoints for natural language risk explanations, interactive assistant chat,
 and real-time project risk remediation recommendations.
@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 import logging
 
-logger = logging.getLogger("riskvision.llm")
+logger = logging.getLogger("rivexa.llm")
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI Copilot & LLM Explanations"])
 
@@ -31,7 +31,7 @@ class LLMExplanationResponse(BaseModel):
     key_drivers: List[str]
     actionable_recommendations: List[str]
     confidence_score: float = 0.92
-    source_model: str = "RiskVision-LLM-v1.4 (Heuristic / Generative)"
+    source_model: str = "RIVEXA-LLM-v1.4 (Heuristic / Generative)"
 
 
 class ChatMessage(BaseModel):
@@ -53,7 +53,7 @@ class LLMChatResponse(BaseModel):
 def llm_health_check():
     return {
         "status": "healthy",
-        "service": "RiskVision AI LLM Telemetry Helper",
+        "service": "RIVEXA LLM Telemetry Helper",
         "version": "1.0.0",
         "port": 5001,
         "engine": "active"
@@ -68,48 +68,75 @@ def explain_project_risk(input_data: ProjectTelemetryInput):
     """
     prob_pct = round(input_data.failure_probability * 100, 1)
     name = input_data.project_name or "Project"
-    
+    metrics = input_data.metrics or {}
+
+    open_issues = float(metrics.get("open_issues") or 0.0)
+    inactive_days = float(metrics.get("inactive_days") or 0.0)
+    code_coverage = float(metrics.get("code_coverage") or 75.0)
+    build_success = float(metrics.get("build_success_rate") or 90.0)
+    doc_score = float(metrics.get("documentation_score") or 80.0)
+
+    recommendations = []
+    drivers = list(input_data.top_risk_factors) if input_data.top_risk_factors else []
+
+    if inactive_days > 14:
+        recommendations.append(f"Resume regular commit cadence for '{name}' (inactive for {int(inactive_days)} days).")
+        if "Low Repository Activity" not in drivers:
+            drivers.append("Low Repository Activity")
+
+    if open_issues > 10:
+        recommendations.append(f"Triage and resolve unresolved issue backlog ({int(open_issues)} open issues).")
+        if "High Open Issue Backlog" not in drivers:
+            drivers.append("High Open Issue Backlog")
+
+    if code_coverage < 60.0:
+        recommendations.append(f"Increase automated test coverage (currently at {code_coverage:.1f}%).")
+        if "Insufficient Test Coverage" not in drivers:
+            drivers.append("Insufficient Test Coverage")
+
+    if build_success < 80.0:
+        recommendations.append(f"Stabilize CI/CD pipeline and resolve build failures ({build_success:.1f}% success rate).")
+        if "Elevated Build Failure Rate" not in drivers:
+            drivers.append("Elevated Build Failure Rate")
+
+    if doc_score < 60.0:
+        recommendations.append(f"Expand setup and API documentation (documentation score: {doc_score:.1f}/100).")
+        if "Documentation Coverage Gap" not in drivers:
+            drivers.append("Documentation Coverage Gap")
+
+    if not recommendations:
+        recommendations = [
+            f"Maintain current development velocity and automated CI testing standard for '{name}'.",
+            "Perform periodic security dependency scans.",
+            "Schedule quarterly architectural health checks."
+        ]
+
+    if not drivers:
+        drivers = ["Nominal Telemetry Metrics", "Active Maintainer Cadence"]
+
     if input_data.failure_probability >= 0.7:
         summary = (
             f"CRITICAL WARNING: '{name}' exhibits severe failure indicators with a {prob_pct}% probability "
-            f"of project demise. Immediate architectural and management intervention is required."
+            f"of project demise. Immediate architectural and maintainer intervention is required."
         )
-        recommendations = [
-            "Freeze non-essential feature development and execute code stability sprint.",
-            "Re-assign senior engineers to decrease single-point dependency risks.",
-            "Increase automated unit and integration test coverage above 80% threshold.",
-            "Conduct daily risk mitigation standups focusing on blocking technical debt."
-        ]
     elif input_data.failure_probability >= 0.4:
         summary = (
-            f"MODERATE ELEVATED RISK: '{name}' has a {prob_pct}% risk index. While currently functional, "
-            f"telemetry trends indicate potential schedule slippage and growing code debt."
+            f"MODERATE ELEVATED RISK: '{name}' has a {prob_pct}% risk index. Telemetry trends indicate "
+            f"potential maintenance bottlenecks or testing gaps requiring attention."
         )
-        recommendations = [
-            "Perform targeted refactoring on modules with high churn rate.",
-            "Automate build pipeline validation to reduce manual release friction.",
-            "Review pull request review latency to clear developer bottlenecks."
-        ]
     else:
         summary = (
             f"STABLE HEALTH: '{name}' maintains strong failure resistance ({prob_pct}% risk probability). "
-            f"Telemetry metrics align with high-performing engineering baseline standards."
+            f"Telemetry metrics align with healthy engineering baseline standards."
         )
-        recommendations = [
-            "Maintain existing CI/CD test automation standard.",
-            "Schedule quarterly dependency security audits.",
-            "Document architectural patterns for onboarding new contributors."
-        ]
-        
-    drivers = input_data.top_risk_factors or ["High Commit Friction", "Code Complexity Escalation"]
-    
+
     return LLMExplanationResponse(
         project_id=input_data.project_id,
         summary=summary,
-        key_drivers=drivers,
+        key_drivers=drivers[:5],
         actionable_recommendations=recommendations,
         confidence_score=0.94,
-        source_model="RiskVision-LLM-v1.4 Engine"
+        source_model="RIVEXA-LLM-v1.4 Engine"
     )
 
 
@@ -141,7 +168,7 @@ def chat_with_copilot(request: LLMChatRequest):
         suggested = ["Export PDF Risk Report", "Schedule Team Audit"]
     else:
         reply = (
-            f"RiskVision AI Assistant online. I am monitoring operational telemetry{ctx_str}. "
+            f"RIVEXA Assistant online. I am monitoring operational telemetry{ctx_str}. "
             f"Ask me about failure probability, risk driver breakdowns, or mitigation strategies."
         )
         suggested = ["Check System Latency", "Run Model Diagnostic", "View Repositories"]

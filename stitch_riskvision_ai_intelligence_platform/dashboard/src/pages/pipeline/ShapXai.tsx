@@ -30,7 +30,7 @@ export const ShapXai: React.FC = () => {
                 Explainable AI (SHAP Kernel Explanations)
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-pink-500/15 text-pink-400 border border-pink-500/30">
-                EXPLAINED ({shapData?.total_samples_explained ?? 1250} SAMPLES)
+                EXPLAINED ({shapData?.total_samples_explained != null ? shapData.total_samples_explained : 'DYNAMIC'} SAMPLES)
               </span>
             </div>
             <p className="text-xs text-slate-400 font-sans mt-1">

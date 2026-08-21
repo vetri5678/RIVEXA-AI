@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -20,6 +21,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final EmailService emailService;
+    private final ai.riskvision.graveyard.config.HttpCookieOAuth2AuthorizationRequestRepository cookieRepository;
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody UserRegisterRequest request) {
@@ -43,16 +45,9 @@ public class AuthController {
 
     @PostMapping("/resend-verification")
     public ResponseEntity<?> resendVerification(@RequestBody Map<String, String> body) {
-        String email = body != null ? body.get("email") : null;
-        if (email == null || email.trim().isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("detail", "Email address is required."));
-        }
-        try {
-            authService.resendVerification(email);
-            return ResponseEntity.ok(Map.of("message", "Verification email dispatched. Please check your inbox."));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("detail", ex.getMessage()));
-        }
+        String email = body.get("email");
+        authService.resendVerification(email);
+        return ResponseEntity.ok(Map.of("message", "If an account exists, a new verification link has been sent."));
     }
 
     @PostMapping("/login")
@@ -66,8 +61,14 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestBody(required = false) Map<String, String> body) {
+    public ResponseEntity<?> logout(
+            jakarta.servlet.http.HttpServletRequest request,
+            jakarta.servlet.http.HttpServletResponse response,
+            @RequestBody(required = false) Map<String, String> body) {
         String refreshToken = body != null ? body.get("refresh_token") : null;
+        if (cookieRepository != null && request != null && response != null) {
+            cookieRepository.removeAuthorizationRequestCookies(request, response);
+        }
         try {
             authService.logout(refreshToken);
             return ResponseEntity.ok(Map.of("message", "Logged out successfully. Token revoked."));
@@ -168,6 +169,19 @@ public class AuthController {
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("detail", "SMTP test failed: " + ex.getMessage()));
+        }
+    }
+
+    @GetMapping("/login-history")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> getLoginHistory(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        try {
+            return ResponseEntity.ok(authService.getLoginHistory(page, size));
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("detail", "Failed to retrieve login history: " + ex.getMessage()));
         }
     }
 

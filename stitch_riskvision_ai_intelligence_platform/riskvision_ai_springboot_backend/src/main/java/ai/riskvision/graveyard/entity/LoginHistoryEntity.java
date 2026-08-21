@@ -64,6 +64,11 @@ public class LoginHistoryEntity {
     @Column(name = "failure_reason", length = 255)
     private String failureReason;
 
+    /** Indicates whether an admin notification email has already been dispatched for this login event. */
+    @Builder.Default
+    @Column(name = "email_notified")
+    private Boolean emailNotified = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

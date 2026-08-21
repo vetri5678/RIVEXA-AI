@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import authApi from '../api/auth';
+import { useGithubConnectionStatus, useDisconnectGithub } from '../hooks/useRepository';
+import GitHubDisconnectModal from '../components/common/GitHubDisconnectModal';
 import type { UserResponse } from '../api/auth';
 import GlassCard from '../components/common/GlassCard';
 import {
@@ -110,26 +112,62 @@ export const Profile: React.FC = () => {
     }
   };
 
+  // GitHub connection & disconnect hooks
+  const { data: githubConnectionStatus } = useGithubConnectionStatus();
+  const disconnectGithubMutation = useDisconnectGithub();
+  const [isGithubDisconnectModalOpen, setIsGithubDisconnectModalOpen] = useState(false);
+
   const handleConnectProvider = (provider: 'google' | 'github') => {
     const backendUrl = (import.meta as any).env?.VITE_SPRINGBOOT_URL || '';
-    window.location.href = `${backendUrl}/oauth2/authorization/${provider}`;
+    const emailParam = user?.email ? `?user_email=${encodeURIComponent(user.email)}` : '';
+    window.location.href = `${backendUrl}/oauth2/authorization/${provider}${emailParam}`;
   };
 
-  const handleDisconnectProvider = async (provider: string) => {
-    if (!window.confirm(`Are you sure you want to disconnect your linked ${provider} account?`)) {
+  const handleOpenDisconnectModal = (provider: string) => {
+    if (provider === 'github') {
+      setIsGithubDisconnectModalOpen(true);
+    } else {
+      handleDisconnectGoogle();
+    }
+  };
+
+  const handleConfirmDisconnectGithub = async () => {
+    setMessage(null);
+    try {
+      await disconnectGithubMutation.mutateAsync();
+      // Synchronize profile data locally
+      if (user && user.connected_accounts) {
+        const updatedAccounts = user.connected_accounts.filter((a) => a !== 'github');
+        const updatedUser = { ...user, connected_accounts: updatedAccounts };
+        setUser(updatedUser);
+        localStorage.setItem('rv_user', JSON.stringify(updatedUser));
+      }
+      setIsGithubDisconnectModalOpen(false);
+      setMessage({ type: 'success', text: 'GitHub account disconnected successfully.' });
+    } catch (err: any) {
+      console.error('[Profile] GitHub disconnect error:', err);
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || err.message || 'Failed to disconnect GitHub account.',
+      });
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    if (!window.confirm('Are you sure you want to disconnect your linked Google account?')) {
       return;
     }
     setSaving(true);
     setMessage(null);
     try {
-      const updated = await authApi.disconnectAccount(provider);
+      const updated = await authApi.disconnectAccount('google');
       setUser(updated);
       localStorage.setItem('rv_user', JSON.stringify(updated));
-      setMessage({ type: 'success', text: `Successfully unlinked ${provider} account.` });
+      setMessage({ type: 'success', text: 'Successfully unlinked Google account.' });
     } catch (err: any) {
       setMessage({
         type: 'error',
-        text: err.response?.data?.error || err.response?.data?.detail || 'Failed to unlink account.',
+        text: err.response?.data?.error || err.response?.data?.detail || 'Failed to unlink Google account.',
       });
     } finally {
       setSaving(false);
@@ -146,6 +184,9 @@ export const Profile: React.FC = () => {
   }
 
   const isProviderConnected = (prov: string) => {
+    if (prov === 'github') {
+      return githubConnectionStatus?.connected === true;
+    }
     return user?.connected_accounts?.includes(prov) || false;
   };
 
@@ -285,7 +326,7 @@ export const Profile: React.FC = () => {
                 </div>
               </form>
             ) : (
-              <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div>
                   <span className="text-slate-400 block mb-1">Full Name</span>
                   <span className="text-slate-100 font-medium">{user?.full_name || 'Not specified'}</span>
@@ -393,7 +434,7 @@ export const Profile: React.FC = () => {
                 </div>
                 {isProviderConnected('google') ? (
                   <button
-                    onClick={() => handleDisconnectProvider('google')}
+                    onClick={() => handleOpenDisconnectModal('google')}
                     className="btn-danger text-xs py-1.5 px-3 rounded-lg cursor-pointer"
                   >
                     Disconnect
@@ -420,12 +461,22 @@ export const Profile: React.FC = () => {
                   </div>
                 </div>
                 {isProviderConnected('github') ? (
-                  <button
-                    onClick={() => handleDisconnectProvider('github')}
-                    className="btn-danger text-xs py-1.5 px-3 rounded-lg cursor-pointer"
-                  >
-                    Disconnect
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleConnectProvider('github')}
+                      className="btn-secondary text-xs py-1.5 px-3 rounded-lg cursor-pointer"
+                      title="Connect a different GitHub account"
+                    >
+                      Switch Account
+                    </button>
+                    <button
+                      onClick={() => handleOpenDisconnectModal('github')}
+                      disabled={disconnectGithubMutation.isPending}
+                      className="btn-danger text-xs py-1.5 px-3 rounded-lg cursor-pointer"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={() => handleConnectProvider('github')}
@@ -439,6 +490,14 @@ export const Profile: React.FC = () => {
           </GlassCard>
         </div>
       </div>
+
+      {/* Custom Confirmation Modal for GitHub Disconnection */}
+      <GitHubDisconnectModal
+        isOpen={isGithubDisconnectModalOpen}
+        onClose={() => setIsGithubDisconnectModalOpen(false)}
+        onConfirm={handleConfirmDisconnectGithub}
+        isPending={disconnectGithubMutation.isPending}
+      />
     </div>
   );
 };

@@ -196,6 +196,12 @@ def load_config(config_path: str | Path) -> PipelineConfig:
     """
     config_path = Path(config_path)
 
+    if not config_path.exists() and not config_path.is_absolute():
+        backend_root = Path(__file__).resolve().parent.parent.parent
+        resolved = backend_root / config_path
+        if resolved.exists():
+            config_path = resolved
+
     if not config_path.exists():
         raise ConfigurationError(
             f"Configuration file not found: {config_path}"

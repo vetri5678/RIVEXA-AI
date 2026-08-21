@@ -54,8 +54,14 @@ export const authApi = {
     return data;
   },
 
-  confirmPasswordReset: async (token: string, newPassword: string) => {
-    const { data } = await apiClient.post('/auth/password-reset/confirm', { token, newPassword });
+  confirmPasswordReset: async (tokenOrOtp: string, newPassword: string) => {
+    const { data } = await apiClient.post('/auth/password-reset/confirm', {
+      token: tokenOrOtp,
+      otp: tokenOrOtp,
+      otpOrToken: tokenOrOtp,
+      newPassword: newPassword,
+      new_password: newPassword,
+    });
     return data;
   },
 

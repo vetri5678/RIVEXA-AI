@@ -54,7 +54,7 @@ class PredictionResponseSchema(BaseModel):
     probability: float = Field(..., example=0.954)
     topFeatures: List[str] = Field(..., example=["Budget Overrun", "Schedule Delay", "Critical Bugs"])
     shapExplainability: Optional[Dict[str, Any]] = None
-    model: str = Field("Random Forest", example="Random Forest")
+    model: str = Field("XGBoost", example="XGBoost")
     version: str = Field("1.0.0", example="1.0.0")
     predictionTime: str = Field(..., example="2026-07-28T15:46:22Z")
 

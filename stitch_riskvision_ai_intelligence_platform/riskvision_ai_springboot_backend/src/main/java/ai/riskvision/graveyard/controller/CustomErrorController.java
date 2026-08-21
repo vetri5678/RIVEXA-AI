@@ -31,10 +31,19 @@ public class CustomErrorController implements ErrorController {
 
         int statusCode = statusObj != null ? Integer.parseInt(statusObj.toString()) : 500;
         String requestUri = requestUriObj != null ? requestUriObj.toString() : "";
-        Throwable exception = exceptionObj instanceof Throwable ? (Throwable) exceptionObj : null;
 
-        String errorMessage = exception != null ? exception.getMessage() : "An unexpected server error occurred";
-        log.error("CustomErrorController caught error: status={}, uri={}, exception={}", statusCode, requestUri, errorMessage);
+        Throwable exception = exceptionObj instanceof Throwable ? (Throwable) exceptionObj : null;
+        Throwable rootCause = exception;
+        while (rootCause != null && rootCause.getCause() != null && rootCause != rootCause.getCause()) {
+            rootCause = rootCause.getCause();
+        }
+
+        String errorMessage = rootCause != null ? rootCause.getMessage() : (exception != null ? exception.getMessage() : null);
+        if (errorMessage == null || errorMessage.trim().isEmpty() || errorMessage.contains("Filter execution threw an exception")) {
+            errorMessage = "Authentication failed. Please check provider credentials and try again.";
+        }
+
+        log.error("CustomErrorController caught error: status={}, uri={}, rootMessage={}", statusCode, requestUri, errorMessage);
 
         String baseUrl = frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl;
         if (baseUrl.endsWith("/dashboard")) {

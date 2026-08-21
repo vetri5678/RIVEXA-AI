@@ -64,7 +64,7 @@ export const ModelEngineMetricsWidget: React.FC = () => {
   return (
     <WidgetWrapper
       title="ML MODEL PERFORMANCE METRICS"
-      subtitle={`${version?.modelName ?? 'RandomForest'} ${version?.modelVersion ?? ''} — Trained on ${model?.dataset_records?.toLocaleString() ?? '—'} records`}
+      subtitle={`${version?.modelName ?? 'XGBoost'} ${version?.modelVersion ?? ''} — Trained on ${model?.dataset_records?.toLocaleString() ?? '—'} records`}
       isLoading={isLoading}
       isError={metricsError}
       onRetry={refetch}

@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FcGoogle } from 'react-icons/fc';
 import { FaGithub } from 'react-icons/fa';
 import authApi from '../api/auth';
 import {
-  ShieldCheck,
   Key,
   Mail,
   User,
@@ -13,8 +12,8 @@ import {
   RefreshCw,
   AlertCircle,
   X,
-  CheckCircle2,
-} from 'lucide-react';
+  CheckCircle2 } from 'lucide-react';
+import { RivexaLogo } from '../components/common/RivexaLogo';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -28,8 +27,7 @@ const Toast: React.FC<ToastItem & { onDismiss: (id: number) => void }> = ({
   id,
   message,
   type,
-  onDismiss,
-}) => {
+  onDismiss }) => {
   useEffect(() => {
     const t = setTimeout(() => onDismiss(id), 5000);
     return () => clearTimeout(t);
@@ -38,8 +36,7 @@ const Toast: React.FC<ToastItem & { onDismiss: (id: number) => void }> = ({
   const styles = {
     error: 'bg-red-500/10 border-red-500/30 text-red-400',
     info: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
-    success: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-  };
+    success: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' };
 
   return (
     <motion.div
@@ -141,8 +138,7 @@ export const Register: React.FC = () => {
         email: emailNormalized,
         username: username.trim(),
         password,
-        full_name: fullName.trim(),
-      });
+        full_name: fullName.trim() });
       setSuccess(true);
       pushToast('Account created! A verification link has been sent to your email.', 'success');
     } catch (err: any) {
@@ -199,18 +195,13 @@ export const Register: React.FC = () => {
         >
           {/* Brand Header */}
           <div className="flex flex-col items-center mb-8">
-            <div className="p-3 bg-blue-600/10 border border-blue-500/20 rounded-xl text-blue-400 mb-3 shadow-sm">
-              <ShieldCheck size={32} />
-            </div>
-            <h1 className="text-xl font-bold text-slate-100 tracking-tight text-center">
-              RiskVision AI
-            </h1>
-            <p className="text-xs text-slate-400 font-medium tracking-wide mt-1">
+            <RivexaLogo variant="compact" size={34} alt="RIVEXA" />
+            <p className="text-xs text-slate-400 font-medium tracking-wide mt-3">
               Create Enterprise Credentials
             </p>
           </div>
 
-          <div className="bg-[#1E293B]/90 border border-slate-700/60 rounded-xl p-8 shadow-card backdrop-blur-sm">
+          <div className="bg-[#1E293B]/90 border border-slate-700/60 rounded-xl p-5 sm:p-8 px-4 sm:px-8 shadow-card backdrop-blur-sm">
             {success ? (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -407,7 +398,7 @@ export const Register: React.FC = () => {
           </div>
 
           <p className="text-center text-[11px] text-slate-500 mt-6">
-            © 2026 RiskVision AI. Protected by enterprise single sign-on.
+            © 2026 RIVEXA. Protected by enterprise single sign-on.
           </p>
         </motion.div>
       </div>

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import authApi from '../api/auth';
 import { AlertCircle, X, RefreshCw } from 'lucide-react';
+import { RivexaLogo } from '../components/common/RivexaLogo';
 
 interface ToastItem {
   id: number;
@@ -50,6 +52,7 @@ const Toast: React.FC<ToastItem & { onDismiss: (id: number) => void }> = ({
 };
 
 export const Login: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -66,11 +69,25 @@ export const Login: React.FC = () => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
   useEffect(() => {
-    // If already authenticated, redirect to dashboard automatically
+    // If already authenticated with a valid token, redirect to dashboard automatically
     const existingToken = localStorage.getItem('rv_access_token');
     if (existingToken) {
-      console.log('[Login] Existing token found. Redirecting to Dashboard...');
-      window.location.hash = '#/dashboard';
+      authApi.getMe()
+        .then(() => {
+          console.log('[Login] Active session verified. Redirecting to Dashboard...');
+          navigate('/dashboard', { replace: true });
+          window.location.hash = '#/dashboard';
+        })
+        .catch(() => {
+          console.log('[Login] Existing token invalid or expired. Purging stale auth state.');
+          localStorage.removeItem('rv_access_token');
+          localStorage.removeItem('rv_refresh_token');
+          localStorage.removeItem('rv_user');
+          localStorage.removeItem('rivexa_user');
+          localStorage.removeItem('rivexa_token');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+        });
       return;
     }
 
@@ -84,9 +101,11 @@ export const Login: React.FC = () => {
     const errorParam = params.get('error');
 
     if (errorParam) {
-      const decoded = decodeURIComponent(errorParam);
+      let decoded = decodeURIComponent(errorParam);
+      if (decoded.includes('Transaction silently rolled back') || decoded.includes('rollback-only') || decoded.includes('Filter execution threw an exception')) {
+        decoded = 'GitHub authentication failed. Please try again.';
+      }
       setError(decoded);
-      pushToast(decoded, 'error');
       if (window.history.replaceState) {
         window.history.replaceState(
           null,
@@ -101,7 +120,7 @@ export const Login: React.FC = () => {
       setEmail(saved);
       setRememberMe(true);
     }
-  }, []);
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,13 +138,30 @@ export const Login: React.FC = () => {
 
       const user = await authApi.getMe();
       localStorage.setItem('rv_user', JSON.stringify(user));
+      navigate('/dashboard', { replace: true });
       window.location.hash = '#/dashboard';
     } catch (err: any) {
-      const detail =
-        err.response?.data?.detail || err.response?.data?.message || err.message;
-      let msg = typeof detail === 'string' ? detail : 'Invalid credentials.';
+      let msg = 'Invalid credentials.';
+      if (err.response) {
+        const status = err.response.status;
+        const detail = err.response.data?.message || err.response.data?.detail;
+        
+        if (status === 401) {
+          msg = (typeof detail === 'string' && detail.trim().length > 0) ? detail : 'Invalid email or password.';
+        } else if (status === 403) {
+          msg = 'You do not have permission to access this account.';
+        } else if (status >= 500) {
+          msg = 'Authentication service is temporarily unavailable.';
+        } else {
+          msg = (typeof detail === 'string' && detail.trim().length > 0) ? detail : `Error: ${status}`;
+        }
+      } else if (err.request) {
+        msg = 'Unable to connect to the authentication server.';
+      } else {
+        msg = err.message || 'An unexpected error occurred.';
+      }
+
       setError(msg);
-      pushToast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -133,6 +169,19 @@ export const Login: React.FC = () => {
 
   const handleOAuth = (provider: 'google' | 'github') => {
     if (oauthLoading) return;
+    setError('');
+    // Purge ALL local/session storage tokens from any prior session before starting fresh OAuth flow.
+    // This prevents stale tokens from a previous user leaking into the new OAuth callback.
+    localStorage.removeItem('rv_access_token');
+    localStorage.removeItem('rv_refresh_token');
+    localStorage.removeItem('rv_user');
+    localStorage.removeItem('rivexa_user');
+    localStorage.removeItem('rivexa_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user');
+    sessionStorage.removeItem('rv_toast_msg');
+    sessionStorage.removeItem('rv_toast_type');
+
     setOAuthLoading(provider);
     pushToast(
       `Connecting to ${provider === 'google' ? 'Google' : 'GitHub'} OAuth…`,
@@ -160,17 +209,7 @@ export const Login: React.FC = () => {
       <div className="bg-[#030d25] text-[#d9e2ff] font-sans min-h-screen flex flex-col selection:bg-[#00e5ff]/20 selection:text-[#00daf3] overflow-x-hidden relative">
         {/* Top App Bar Header */}
         <header className="w-full h-16 flex items-center justify-center px-6 bg-[#030d25] border-b border-[#1f2942]/40">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="material-symbols-outlined text-[#00daf3]"
-              style={{ fontVariationSettings: "'FILL' 1", fontSize: "24px" }}
-            >
-              shield
-            </span>
-            <h1 className="text-xl font-bold text-white tracking-tight font-sans">
-              RiskVision AI
-            </h1>
-          </div>
+          <RivexaLogo variant="compact" size={34} alt="RIVEXA" />
         </header>
 
         {/* Main Content Canvas */}
@@ -193,7 +232,7 @@ export const Login: React.FC = () => {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
-            className="w-full max-w-[420px] bg-[#07122a]/90 rounded-2xl p-7 relative border border-[#1f2942] shadow-2xl backdrop-blur-xl"
+            className="w-full max-w-[420px] bg-[#07122a]/90 rounded-2xl p-5 sm:p-7 px-4 sm:px-7 relative border border-[#1f2942] shadow-2xl backdrop-blur-xl"
           >
             {/* Error Banner */}
             <AnimatePresence>
@@ -266,7 +305,7 @@ export const Login: React.FC = () => {
                   </span>
                 </label>
                 <a
-                  href="#/password-reset"
+                  href="#/forgot-password"
                   className="text-xs font-mono font-medium text-[#00daf3] hover:underline"
                 >
                   Forgot password?
@@ -396,9 +435,9 @@ export const Login: React.FC = () => {
             </a>
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-xs font-bold text-white">RiskVision AI</p>
+            <p className="text-xs font-bold text-white">RIVEXA</p>
             <p className="text-[11px] text-[#bac9cc]">
-              © 2026 RiskVision AI. Protected by enterprise single sign-on.
+              © 2026 RIVEXA. Protected by enterprise single sign-on.
             </p>
           </div>
         </footer>

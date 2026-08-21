@@ -1,87 +1,114 @@
 import { defineConfig } from 'vite';
 
+const vitePort = parseInt(process.env.VITE_PORT, 10) || 5176;
+
 export default defineConfig({
   root: 'stitch_riskvision_ai_intelligence_platform',
   server: {
-    port: 5176,
+    host: '127.0.0.1',
+    port: vitePort,
+    strictPort: false,
     proxy: {
-      // ── Spring Boot (:8080) routes ────────────────────────────────────────
-      '/api/v1/repositories': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, req, res) => {
-            console.error(`[Proxy] /repositories → Spring Boot failed (${err.message})`);
-            if (res && !res.headersSent) {
-              res.writeHead(503, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Spring Boot unavailable', message: err.message, path: req.url }));
-            }
-          });
-        },
-      },
-      '/api/v1/auth': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, req, res) => {
-            console.error(`[Proxy] /auth → Spring Boot failed (${err.message})`);
-            if (res && !res.headersSent) {
-              res.writeHead(503, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Spring Boot unavailable', message: err.message, path: req.url }));
-            }
-          });
-        },
-      },
-      '/api/v1/me': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
+      // ── FastAPI ML Engine (:8000) routes ──────────────────────────────────
+      '/api/v1/pipeline/predict': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
       },
-      '/api/v1/projects': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
+      '/api/v1/pipeline/train': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/pipeline/reports': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/pipeline/model': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/pipeline/status': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/pipeline/metrics': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/pipeline/evaluation': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
       },
       '/api/v1/health': {
-        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://localhost:8000',
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
       },
-      '/api/v1/profile': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
+      '/api/v1/ready': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/retraining': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/v1/models': {
+        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
       },
 
-      // ── FastAPI ML Engine (:8000) routes ──────────────────────────────────
-      // IMPORTANT: /api/v1/pipeline MUST route to FastAPI (not Spring Boot)
-      // so the simulator and dashboard status banner get live ML model state.
+      // ── Spring Boot (:8080) pipeline routes ──────────────────────────────
       '/api/v1/pipeline': {
-        target: process.env.VITE_PYTHON_BACKEND_URL || 'http://localhost:8000',
+        target: process.env.VITE_SPRINGBOOT_URL || 'http://127.0.0.1:8080',
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
           proxy.on('error', (err, req, res) => {
-            console.error(`[Proxy] /pipeline → FastAPI ML Engine failed (${err.message})`);
+            console.error(`[Proxy] /pipeline → Spring Boot failed (${err.message})`);
             if (res && !res.headersSent) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
-                error: 'FastAPI ML Engine Unavailable (ECONNREFUSED)',
-                message: `FastAPI unreachable at http://localhost:8000. (${err.message})`,
+                error: 'Spring Boot Pipeline Service Unavailable',
+                message: `Spring Boot unreachable at http://127.0.0.1:8080. (${err.message})`,
                 path: req.url,
-                status: 'UNTRAINED',
-                loaded_model: null,
-                reports_count: 0,
               }));
             }
           });
         },
       },
 
+      // ── Spring Boot (:8080) routes ────────────────────────────────────────
+      '/api': {
+        target: process.env.VITE_SPRINGBOOT_URL || 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, req, res) => {
+            console.error(`[Proxy] ${req.url} → Spring Boot failed (${err.message})`);
+            if (res && !res.headersSent) {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Spring Boot unavailable', message: err.message, path: req.url }));
+            }
+          });
+        },
+      },
+
       '/oauth2': {
-        target: process.env.VITE_SPRINGBOOT_URL || 'http://localhost:8080',
+        target: process.env.VITE_SPRINGBOOT_URL || 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/login/oauth2': {
+        target: process.env.VITE_SPRINGBOOT_URL || 'http://127.0.0.1:8080',
         changeOrigin: true,
         secure: false,
       },

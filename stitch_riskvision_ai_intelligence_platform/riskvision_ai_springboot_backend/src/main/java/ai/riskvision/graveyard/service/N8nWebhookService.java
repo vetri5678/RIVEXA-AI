@@ -1,6 +1,5 @@
 package ai.riskvision.graveyard.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
@@ -13,11 +12,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class N8nWebhookService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    @Value("${n8n.webhook.enabled:true}")
+    private boolean webhookEnabled;
+
+    public N8nWebhookService() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(1500);
+        factory.setReadTimeout(2000);
+        this.restTemplate = new RestTemplate(factory);
+    }
 
     @Value("${n8n.webhook.registration:http://localhost:5678/webhook/registration-verification}")
     private String registrationWebhookUrl;
@@ -61,6 +69,10 @@ public class N8nWebhookService {
     }
 
     private void sendWebhook(String url, Map<String, Object> payload, String eventName) {
+        if (!webhookEnabled) {
+            log.debug("n8n Webhooks are disabled. Skipping event {}.", eventName);
+            return;
+        }
         if (url == null || url.trim().isEmpty()) {
             log.warn("n8n Webhook URL for event {} is not configured. Skipping webhook trigger.", eventName);
             return;

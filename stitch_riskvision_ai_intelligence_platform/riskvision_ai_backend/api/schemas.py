@@ -1,5 +1,5 @@
-"""
-RiskVision AI — API Request & Response Schemas
+﻿"""
+RIVEXA — API Request & Response Schemas
 
 Defines the Pydantic schemas for the REST API endpoints,
 ensuring strict validation of request payloads and typed responses.
@@ -32,6 +32,26 @@ class ProjectPredictionInput(BaseModel):
     features_delivered: Optional[float] = Field(0.0, ge=0, description="Count of features delivered")
     identified_risks: Optional[float] = Field(0.0, ge=0, description="Count of identified risks")
     total_tasks: Optional[float] = Field(1.0, gt=0, description="Total count of project tasks")
+
+    # Additional model features to match the 22 columns
+    estimated_duration: Optional[float] = Field(None, description="Estimated duration in months")
+    schedule_delay: Optional[float] = Field(None, description="Schedule delay in days")
+    completion_pct: Optional[float] = Field(None, description="Completion percentage")
+    developer_experience: Optional[float] = Field(None, description="Average developer experience in years")
+    open_issues: Optional[float] = Field(None, description="Count of open issues")
+    critical_bugs: Optional[float] = Field(None, description="Count of critical bugs")
+    code_coverage: Optional[float] = Field(None, description="Code coverage percentage")
+    technical_debt: Optional[float] = Field(None, description="Technical debt in hours")
+    security_vulnerabilities: Optional[float] = Field(None, description="Count of security vulnerabilities")
+    dependency_vulnerabilities: Optional[float] = Field(None, description="Count of dependency vulnerabilities")
+    repository_health: Optional[float] = Field(None, description="Repository health score percentage")
+    build_failures: Optional[float] = Field(None, description="Count of build failures")
+    deployment_failures: Optional[float] = Field(None, description="Count of deployment failures")
+    requirement_changes: Optional[float] = Field(None, description="Count of requirement changes")
+    customer_satisfaction: Optional[float] = Field(None, description="Customer satisfaction score")
+    priority: Optional[str] = Field(None, description="Project priority level")
+    department: Optional[str] = Field(None, description="Project department")
+    project_type: Optional[str] = Field(None, description="Project type category")
 
     model_config = {
         "json_schema_extra": {
@@ -132,6 +152,10 @@ class PredictionResponse(BaseModel):
     report_id: str
     report_path: str
     generated_at: str
+    model_version: Optional[str] = "xgboost-v2.4"
+    model_name: Optional[str] = "XGBClassifier"
+    model_type: Optional[str] = "XGBoost"
+    feature_fingerprint: Optional[str] = None
 
 
 class BatchPredictionResponse(BaseModel):

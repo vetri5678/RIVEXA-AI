@@ -1,16 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
   <defs>
-    <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#007AFF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#7000FF;stop-opacity:1" />
+    <linearGradient id="rv-eye-grad-lg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00aaff"/>
+      <stop offset="100%" stop-color="#0044ff"/>
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    <linearGradient id="rv-inner-grad-lg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00d4ff"/>
+      <stop offset="100%" stop-color="#0066ff"/>
+    </linearGradient>
+    <filter id="glow-lg" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="strong-glow-lg" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
-  <circle cx="50" cy="50" r="40" fill="none" stroke="url(#logo-grad)" stroke-width="2" stroke-dasharray="2 4" opacity="0.3" />
-  <path d="M50 20 L80 40 L80 70 L50 90 L20 70 L20 40 Z" fill="none" stroke="url(#logo-grad)" stroke-width="4" stroke-linejoin="round" filter="url(#glow)" />
-  <path d="M50 35 L65 45 L65 65 L50 75 L35 65 L35 45 Z" fill="url(#logo-grad)" opacity="0.8" />
-  <circle cx="50" cy="50" r="5" fill="#00F0FF" filter="url(#glow)" />
+  <!-- Eye lens shape -->
+  <path d="M 12 60 Q 60 8 108 60 Q 60 112 12 60 Z"
+    fill="none" stroke="url(#rv-eye-grad-lg)" stroke-width="3.5" filter="url(#glow-lg)"/>
+  <!-- Scan lines -->
+  <line x1="18" y1="60" x2="31" y2="60" stroke="#0088ee" stroke-width="1.5" opacity="0.85"/>
+  <line x1="89" y1="60" x2="102" y2="60" stroke="#0088ee" stroke-width="1.5" opacity="0.85"/>
+  <!-- Outer ring -->
+  <circle cx="60" cy="60" r="29" fill="none" stroke="url(#rv-eye-grad-lg)" stroke-width="2" opacity="0.5"/>
+  <!-- Dashed inner ring -->
+  <circle cx="60" cy="60" r="21" fill="none" stroke="url(#rv-eye-grad-lg)" stroke-width="1.2" opacity="0.35" stroke-dasharray="3 5"/>
+  <!-- Tick marks -->
+  <line x1="60" y1="31" x2="60" y2="26" stroke="#0099dd" stroke-width="1.5" opacity="0.7"/>
+  <line x1="60" y1="89" x2="60" y2="94" stroke="#0099dd" stroke-width="1.5" opacity="0.7"/>
+  <!-- R monogram -->
+  <path d="M 46 49 L 46 71 M 46 49 L 57 49 Q 62 49 62 55 Q 62 61 57 61 L 46 61 M 57 61 L 63 71"
+    fill="none" stroke="url(#rv-inner-grad-lg)" stroke-width="3" stroke-linecap="round"
+    stroke-linejoin="round" filter="url(#glow-lg)"/>
+  <!-- V monogram -->
+  <path d="M 65 49 L 72 71 L 79 49"
+    fill="none" stroke="url(#rv-inner-grad-lg)" stroke-width="3" stroke-linecap="round"
+    stroke-linejoin="round" filter="url(#glow-lg)"/>
+  <!-- Pupil -->
+  <circle cx="60" cy="60" r="4.5" fill="#00d4ff" filter="url(#strong-glow-lg)"/>
+  <circle cx="60" cy="60" r="2.5" fill="#ffffff" opacity="0.9"/>
 </svg>

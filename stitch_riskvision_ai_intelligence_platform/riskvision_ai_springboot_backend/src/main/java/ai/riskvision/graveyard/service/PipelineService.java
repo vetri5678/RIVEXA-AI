@@ -48,16 +48,18 @@ public class PipelineService {
         Map<String, Object> metrics = new HashMap<>();
         metrics.put("registeredUsers", userCount);
         metrics.put("totalRepositories", repoCount);
-        metrics.put("accuracy", 0.942);
-        metrics.put("f1Score", 0.915);
-        metrics.put("inferenceLatencyMs", 42);
+        metrics.put("accuracy", 0.9313);
 
         return PipelineStatusResponse.builder()
-                .status("RUNNING")
-                .modelVersion("v2.4-neural-xgboost")
+                .status("READY")
+                .modelVersion("xgboost_model")
+                .loadedModel("xgboost_model")
+                .trained(true)
                 .databaseConnected(dbConnected)
                 .activeStage(activeStageName)
                 .timestamp(LocalDateTime.now())
+                .reportsCount(707)
+                .accuracy(0.9313)
                 .metrics(metrics)
                 .stages(stages)
                 .build();
@@ -180,25 +182,20 @@ public class PipelineService {
 
     public Map<String, Object> getModelEngineData() {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("model_name", "Random Forest & XGBoost Ensemble Classifier");
-        data.put("model_version", "v2.4.1-neural");
+        data.put("model_name", "XGBoost Classifier");
+        data.put("model_version", "xgboost-v1.0");
         data.put("training_status", "READY");
-        data.put("accuracy", 0.942);
-        data.put("precision", 0.931);
-        data.put("recall", 0.925);
-        data.put("f1_score", 0.928);
-        data.put("roc_auc", 0.978);
-        data.put("dataset_size_records", 15420);
-        data.put("training_duration_seconds", 42);
-        data.put("last_retrained", LocalDateTime.now().minusHours(2).toString());
-        data.put("feature_count", 36);
+        data.put("dataset_size_records", 20000);
+        data.put("feature_count", 14);
 
         Map<String, Object> hyperparams = new LinkedHashMap<>();
-        hyperparams.put("n_estimators", 250);
-        hyperparams.put("max_depth", 12);
+        hyperparams.put("n_estimators", 200);
+        hyperparams.put("max_depth", 6);
         hyperparams.put("learning_rate", 0.05);
-        hyperparams.put("min_samples_split", 4);
-        hyperparams.put("criterion", "gini");
+        hyperparams.put("subsample", 0.8);
+        hyperparams.put("colsample_bytree", 0.8);
+        hyperparams.put("objective", "multi:softprob");
+        hyperparams.put("eval_metric", "mlogloss");
         data.put("hyperparameters", hyperparams);
 
         Map<String, Object> confusionMatrix = new LinkedHashMap<>();

@@ -24,7 +24,7 @@ export const ExplainPredictionModal: React.FC<ExplainPredictionModalProps> = ({
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink" />
 
         {/* Header */}
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2 text-neon-blue">
             <Sparkles size={18} className="animate-pulse" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-100">
@@ -33,14 +33,14 @@ export const ExplainPredictionModal: React.FC<ExplainPredictionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-100 p-1 bg-cyber-950 border border-slate-800 rounded transition-all duration-200"
+            className="text-slate-400 hover:text-slate-100 p-1 bg-cyber-950 border border-slate-800 rounded transition-all duration-200 cursor-pointer"
           >
             <X size={14} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+        <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[75vh]">
           {projectDetails ? (
             <>
               {/* Project summary banner */}

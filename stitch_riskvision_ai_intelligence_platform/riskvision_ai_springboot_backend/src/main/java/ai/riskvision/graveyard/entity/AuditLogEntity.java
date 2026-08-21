@@ -52,6 +52,12 @@ public class AuditLogEntity {
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
 
+    @Column(name = "resource_type", length = 50)
+    private String resourceType;
+
+    @Column(name = "resource_id", length = 100)
+    private String resourceId;
+
     @Column(name = "endpoint", length = 255)
     private String endpoint;
 

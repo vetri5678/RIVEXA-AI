@@ -48,7 +48,7 @@ export const ModelEngine: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-400 font-sans mt-1">
-              Random Forest & XGBoost Ensemble hyperparameters, cross-validation metrics, confusion matrix, and retrain pipeline triggers.
+              XGBoost model hyperparameters, cross-validation metrics, confusion matrix, and retrain pipeline triggers.
             </p>
           </div>
         </div>
@@ -69,64 +69,14 @@ export const ModelEngine: React.FC = () => {
       </div>
 
       {/* Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
-        {/* Left Column: Accuracy Grid */}
-        <div className="lg:col-span-1 space-y-6">
-          <WidgetWrapper
-            title="ACCURACY SCORECARD"
-            subtitle="Model evaluation parameters"
-            isLoading={isLoading}
-            isError={isError}
-            onRetry={refetch}
-          >
-            <div className="grid grid-cols-2 gap-3 py-2 font-mono text-xs">
-              <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
-                <span className="text-slate-500 text-[9px] uppercase block">Accuracy</span>
-                <span className="text-lg font-extrabold text-cyan-400 block mt-1">
-                  {((modelData?.accuracy ?? 0.942) * 100).toFixed(1)}%
-                </span>
-              </div>
-
-              <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
-                <span className="text-slate-500 text-[9px] uppercase block">Precision</span>
-                <span className="text-lg font-extrabold text-emerald-400 block mt-1">
-                  {((modelData?.precision ?? 0.931) * 100).toFixed(1)}%
-                </span>
-              </div>
-
-              <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
-                <span className="text-slate-500 text-[9px] uppercase block">Recall</span>
-                <span className="text-lg font-extrabold text-purple-400 block mt-1">
-                  {((modelData?.recall ?? 0.925) * 100).toFixed(1)}%
-                </span>
-              </div>
-
-              <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
-                <span className="text-slate-500 text-[9px] uppercase block">F1 Score</span>
-                <span className="text-lg font-extrabold text-amber-400 block mt-1">
-                  {((modelData?.f1_score ?? 0.928) * 100).toFixed(1)}%
-                </span>
-              </div>
-
-              <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl col-span-2">
-                <span className="text-slate-500 text-[9px] uppercase block">ROC AUC Score</span>
-                <span className="text-lg font-extrabold text-blue-400 block mt-1">
-                  {((modelData?.roc_auc ?? 0.978) * 100).toFixed(1)}%
-                </span>
-              </div>
-            </div>
-          </WidgetWrapper>
-        </div>
-
-        {/* Right Column: Hyperparameters & Confusion Matrix */}
-        <div className="lg:col-span-2 space-y-6">
-          <WidgetWrapper
-            title="HYPERPARAMETERS & CONFUSION MATRIX"
-            subtitle="Model structural weights & prediction distribution"
-            isLoading={isLoading}
-            isError={isError}
-            onRetry={refetch}
-          >
+      <div className="grid grid-cols-1 gap-6 mb-8">
+        <WidgetWrapper
+          title="XGBoost Engine Architecture"
+          subtitle="XGBoost model structural configuration & prediction distribution"
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={refetch}
+        >
             <div className="space-y-6 py-2 font-mono text-xs">
               {/* Hyperparameters */}
               <div>
@@ -135,11 +85,13 @@ export const ModelEngine: React.FC = () => {
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {Object.entries(modelData?.hyperparameters || {
-                    n_estimators: 250,
-                    max_depth: 12,
+                    n_estimators: 200,
+                    max_depth: 6,
                     learning_rate: 0.05,
-                    min_samples_split: 4,
-                    criterion: 'gini'
+                    subsample: 0.8,
+                    colsample_bytree: 0.8,
+                    objective: 'multi:softprob',
+                    eval_metric: 'mlogloss'
                   }).map(([key, val]) => (
                     <div key={key} className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg">
                       <span className="text-slate-500 text-[9px] uppercase block">{key}</span>
@@ -184,9 +136,8 @@ export const ModelEngine: React.FC = () => {
             </div>
           </WidgetWrapper>
         </div>
-      </div>
-    </DashboardLayout>
-  );
-};
+      </DashboardLayout>
+    );
+  };
 
 export default ModelEngine;

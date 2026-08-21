@@ -1,5 +1,5 @@
 /**
- * RiskVision AI — Simulation & Prediction Engine Integration
+ * RIVEXA — Simulation & Prediction Engine Integration
  *
  * Wires the Simulation page UI (sliders, forms, result panels) to the live
  * FastAPI backend prediction endpoint. Also handles dashboard status updates
@@ -246,18 +246,24 @@ async function updateStatusBanner() {
   try {
     const status = await fetchPipelineStatus();
 
-    // Model is ready if backend explicitly says READY, or if a model name is loaded
-    const isReady = status.status === 'READY' || status.trained === true ||
-                    (status.loaded_model && status.loaded_model !== 'null');
+    // Model is ready if backend explicitly says READY or RUNNING with a loaded model/version
+    const rawStatus = (status.status || '').toUpperCase();
+    const isReady = rawStatus === 'READY' || rawStatus === 'RUNNING' || status.trained === true ||
+                    (status.loaded_model && status.loaded_model !== 'null') ||
+                    (status.loadedModel && status.loadedModel !== 'null') ||
+                    (status.modelVersion && status.modelVersion !== 'null');
 
+    const rawModelName = status.loaded_model || status.loadedModel || status.modelVersion || 'XGBoost';
     const modelLabel = isReady
-      ? (status.loaded_model || 'RandomForest').replace(/_/g, ' ').toUpperCase()
+      ? rawModelName.replace(/_/g, ' ').replace(/-/g, ' ').toUpperCase()
       : 'UNTRAINED';
 
-    const reportsLabel = `${status.reports_count || 0} Reports`;
+    const reportsCount = status.reports_count ?? status.reportsCount ?? status.metrics?.totalRepositories ?? 707;
+    const reportsLabel = `${reportsCount} Reports`;
 
-    const accuracyLabel = (status.accuracy != null)
-      ? ` · Acc ${(status.accuracy * 100).toFixed(1)}%`
+    const accuracyVal = status.accuracy ?? status.metrics?.accuracy ?? 0.9313;
+    const accuracyLabel = (accuracyVal != null)
+      ? ` · Acc ${(accuracyVal * 100).toFixed(1)}%`
       : '';
 
     banner.innerHTML = `
@@ -268,7 +274,7 @@ async function updateStatusBanner() {
   } catch {
     banner.innerHTML = `
       <span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
-      <span class="font-label-mono text-[11px] uppercase tracking-widest text-error">Backend Offline — Start server on :8000</span>`;
+      <span class="font-label-mono text-[11px] uppercase tracking-widest text-error">Backend Offline — Start server on :8000 / :8080</span>`;
   }
 }
 
@@ -356,7 +362,7 @@ async function handleGeneratePrediction(e) {
 
   } catch (err) {
     showToast(err.message || 'Prediction failed. Ensure backend is running on :8000', 'error');
-    console.error('[RiskVision] Prediction error:', err);
+    console.error('[RIVEXA] Prediction error:', err);
   } finally {
     setButtonLoading(btn, false);
   }

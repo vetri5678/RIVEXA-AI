@@ -4,16 +4,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -52,7 +49,10 @@ public class SecurityConfig {
     private String corsAllowedOrigins;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            org.springframework.security.web.AuthenticationEntryPoint customAuthenticationEntryPoint,
+            org.springframework.security.web.access.AccessDeniedHandler customAccessDeniedHandler) throws Exception {
         http
             // ── CORS ─────────────────────────────────────────────────────────
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -94,9 +94,8 @@ public class SecurityConfig {
 
             // ── Exception Handling ───────────────────────────────────────────
             .exceptionHandling(exceptions -> exceptions
-                .defaultAuthenticationEntryPointFor(
-                    new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
-                    new AntPathRequestMatcher("/api/**")))
+                .authenticationEntryPoint(customAuthenticationEntryPoint)
+                .accessDeniedHandler(customAccessDeniedHandler))
 
             // ── Authorization Rules ──────────────────────────────────────────
             .authorizeHttpRequests(auth -> auth
@@ -140,12 +139,19 @@ public class SecurityConfig {
                 // ── Test email: ADMIN only (remove in production) ───────────
                 .requestMatchers("/api/v1/auth/test-email").hasRole("ADMIN")
 
+                // ── Login history: ADMIN only ─────────────────────────
+                .requestMatchers("/api/v1/auth/login-history").hasRole("ADMIN")
+
+                // ── Audit logs and admin APIs: ADMIN only ────────────────────
+                .requestMatchers("/api/v1/audit/**", "/api/admin/**").hasRole("ADMIN")
+
                 // ── User management: ADMIN/MANAGER only ───────────────────
                 .requestMatchers("/api/v1/users/**").hasAnyRole("ADMIN", "MANAGER")
 
                 // ── Authenticated endpoints ─────────────────────────────────
                 .requestMatchers(
                     "/api/v1/repositories/**",
+                    "/api/v1/predictions/**",
                     "/api/v1/projects/**",
                     "/api/v1/me",
                     "/api/v1/profile/**",
@@ -154,7 +160,6 @@ public class SecurityConfig {
                     "/api/v1/auth/oauth2/**",
                     "/api/v1/telemetry/**",
                     "/api/v1/dashboard/**",
-                    "/api/v1/audit/**",
                     "/api/v1/github/**",
                     "/api/github/**",
                     "/api/v1/ai/**",
@@ -213,5 +218,27 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
+    }
+
+    @Bean
+    public org.springframework.security.web.AuthenticationEntryPoint customAuthenticationEntryPoint() {
+        return (request, response, authException) -> {
+            response.setContentType("application/json;charset=UTF-8");
+            response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write(
+                "{\"success\":false,\"status\":401,\"message\":\"" + authException.getMessage() + "\"}"
+            );
+        };
+    }
+
+    @Bean
+    public org.springframework.security.web.access.AccessDeniedHandler customAccessDeniedHandler() {
+        return (request, response, accessDeniedException) -> {
+            response.setContentType("application/json;charset=UTF-8");
+            response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+            response.getWriter().write(
+                "{\"success\":false,\"status\":403,\"message\":\"You do not have permission to access this resource\"}"
+            );
+        };
     }
 }

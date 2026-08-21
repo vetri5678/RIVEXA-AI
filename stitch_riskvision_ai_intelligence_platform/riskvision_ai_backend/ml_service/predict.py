@@ -56,12 +56,18 @@ def preprocess_single_input(raw_data: Dict[str, Any]) -> pd.DataFrame:
 
     df = pd.DataFrame([formatted])
 
-    # Ensure all required features are present
-    for col in FEATURE_COLUMNS:
-        if col not in df.columns:
-            df[col] = 0
-
-    df = df[FEATURE_COLUMNS]
+    # Check if loaded model defines explicit feature_names_in_ (e.g. XGBoost)
+    if hasattr(model_loader.model, "feature_names_in_") and model_loader.model.feature_names_in_ is not None:
+        expected_cols = list(model_loader.model.feature_names_in_)
+        for col in expected_cols:
+            if col not in df.columns:
+                df[col] = 0
+        df = df[expected_cols]
+    else:
+        for col in FEATURE_COLUMNS:
+            if col not in df.columns:
+                df[col] = 0
+        df = df[FEATURE_COLUMNS]
 
     # Apply saved LabelEncoders
     if model_loader.encoders:
@@ -117,7 +123,7 @@ def predict_single_project(input_data: Dict[str, Any]) -> Dict[str, Any]:
 
     prediction_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
-    model_ver = model_loader.metadata.get("model_version", "1.0.0")
+    model_ver = model_loader.metadata.get("model_version", "xgboost-v1.0")
 
     result = {
         "predictionId": prediction_id,
@@ -128,7 +134,7 @@ def predict_single_project(input_data: Dict[str, Any]) -> Dict[str, Any]:
         "probability": round(confidence_val, 4),
         "topFeatures": top_features,
         "topFactors": top_features,  # Compatibility field
-        "model": "Random Forest",
+        "model": "XGBoost",
         "version": model_ver,
         "modelVersion": model_ver,  # Compatibility field
         "predictionTime": now_iso

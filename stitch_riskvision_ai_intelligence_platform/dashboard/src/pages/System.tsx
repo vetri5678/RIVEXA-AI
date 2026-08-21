@@ -85,7 +85,7 @@ export const System: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           <WidgetWrapper
             title="Active Model Telemetry"
-            subtitle="Current Random Forest & XGBoost Hyperparameters & Accuracy Metrics"
+            subtitle="Current XGBoost Hyperparameters & Accuracy Metrics"
             isLoading={modelLoading}
             isError={false}
           >
@@ -98,9 +98,9 @@ export const System: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-semibold text-white">
-                      {model?.algorithm || 'Random Forest Failure Risk Model'}
+                      {model?.algorithm || model?.model_name || 'XGBoost Risk Classifier'}
                     </h4>
-                    <span className="text-[11px] text-slate-400 font-mono">Version: {model?.version_tag || 'v2.4.0-production'}</span>
+                    <span className="text-[11px] text-slate-400 font-mono">Version: {model?.version_tag || 'xgboost-v1.0'}</span>
                   </div>
                 </div>
                 <span className="px-3 py-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono font-bold rounded-full text-[10px] uppercase">
@@ -109,29 +109,29 @@ export const System: React.FC = () => {
               </div>
 
               {/* Grid Metrics */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 font-mono">
                 <div className="p-3.5 bg-white/[0.03] border border-white/[0.08] rounded-xl">
                   <span className="text-slate-400 text-[10px] uppercase block">Accuracy Score</span>
                   <span className="text-xl font-extrabold text-blue-400 block mt-1">
-                    {model?.accuracy ? `${(model.accuracy * 100).toFixed(1)}%` : '89.4%'}
+                    {model?.accuracy != null ? `${(model.accuracy * 100).toFixed(1)}%` : 'Unavailable'}
                   </span>
                 </div>
                 <div className="p-3.5 bg-white/[0.03] border border-white/[0.08] rounded-xl">
                   <span className="text-slate-400 text-[10px] uppercase block">Precision</span>
                   <span className="text-xl font-extrabold text-emerald-400 block mt-1">
-                    {model?.precision ? `${(model.precision * 100).toFixed(1)}%` : '87.2%'}
+                    {model?.precision != null ? `${(model.precision * 100).toFixed(1)}%` : 'Unavailable'}
                   </span>
                 </div>
                 <div className="p-3.5 bg-white/[0.03] border border-white/[0.08] rounded-xl">
                   <span className="text-slate-400 text-[10px] uppercase block">ROC-AUC</span>
                   <span className="text-xl font-extrabold text-cyan-400 block mt-1">
-                    {model?.roc_auc ? `${(model.roc_auc * 100).toFixed(1)}%` : '91.8%'}
+                    {model?.roc_auc != null ? `${(model.roc_auc * 100).toFixed(1)}%` : 'Unavailable'}
                   </span>
                 </div>
                 <div className="p-3.5 bg-white/[0.03] border border-white/[0.08] rounded-xl">
                   <span className="text-slate-400 text-[10px] uppercase block">Last Trained</span>
                   <span className="text-xs font-semibold text-slate-200 block mt-2">
-                    {model?.training_date ? new Date(model.training_date).toLocaleDateString() : 'Recent'}
+                    {model?.training_date ? new Date(model.training_date).toLocaleDateString() : 'Not trained'}
                   </span>
                 </div>
               </div>
@@ -139,21 +139,21 @@ export const System: React.FC = () => {
               {/* Feature Importance Table */}
               <div>
                 <h4 className="font-semibold text-slate-200 mb-3 flex items-center gap-2 font-sans">
-                  <BarChart2 size={16} className="text-blue-400" /> Top Predictive Factors
+                  <BarChart2 size={16} className="text-blue-400" /> Top Model Features (XGBoost Gain Importance)
                 </h4>
                 <div className="space-y-2">
-                  {(featureData?.features && featureData.features.length > 0 ? featureData.features : [
-                    { display_name: 'Commit Velocity Decline (30-day window)', contribution_pct: 34.2 },
-                    { display_name: 'Maintainer / Contributor Churn Rate', contribution_pct: 22.8 },
-                    { display_name: 'Open Issue Resolution Latency', contribution_pct: 18.5 },
-                    { display_name: 'Test Suite Coverage Drop %', contribution_pct: 12.4 },
-                    { display_name: 'Dependency Vulnerability Count', contribution_pct: 12.1 },
-                  ]).map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl text-xs">
-                      <span className="text-slate-300 font-medium">{item.display_name}</span>
-                      <span className="text-cyan-400 font-bold font-mono">{item.contribution_pct}%</span>
+                  {featureData?.features && featureData.features.length > 0 ? (
+                    featureData.features.map((item: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl text-xs">
+                        <span className="text-slate-300 font-medium">{item.display_name || item.name}</span>
+                        <span className="text-cyan-400 font-bold font-mono">{item.contribution_pct ?? item.percentage ?? (item.importance ? (item.importance * 100).toFixed(1) : 0)}%</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 bg-white/[0.02] border border-white/[0.06] rounded-xl text-xs text-slate-400 text-center">
+                      No feature importance telemetry available
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>

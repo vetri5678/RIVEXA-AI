@@ -1,14 +1,10 @@
 package ai.riskvision.graveyard.service;
 
-import ai.riskvision.graveyard.client.GitHubClient;
+import ai.riskvision.graveyard.client.*;
 import ai.riskvision.graveyard.dto.repository.*;
-import ai.riskvision.graveyard.entity.RepositoryEntity;
-import ai.riskvision.graveyard.entity.RepositoryMetricsEntity;
-import ai.riskvision.graveyard.repository.RepositoryEntityRepository;
-import ai.riskvision.graveyard.repository.RepositoryMetricsEntityRepository;
-import ai.riskvision.graveyard.repository.RepositoryActivityEntityRepository;
-import ai.riskvision.graveyard.repository.RepositoryPredictionEntityRepository;
-import ai.riskvision.graveyard.util.GitHubUrlParser;
+import ai.riskvision.graveyard.entity.*;
+import ai.riskvision.graveyard.repository.*;
+import ai.riskvision.graveyard.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -21,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,6 +33,7 @@ public class RepositoryService {
     private final RepositoryValidationService validationService;
     private final RepositorySyncService syncService;
     private final GitHubClient gitHubClient;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public PagedRepositoryResponse findAll(
@@ -43,6 +41,9 @@ public class RepositoryService {
             String search, String status, String riskLevel,
             String predictionStatus, String gitProvider, String language, String organization) {
 
+        if ("name".equals(sortBy)) {
+            sortBy = "repositoryName";
+        }
         Sort sort = Sort.by(
                 "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC,
                 sortBy != null ? sortBy : "createdAt"
@@ -51,6 +52,65 @@ public class RepositoryService {
 
         Page<RepositoryEntity> result = repoRepository.findAllWithFilters(
                 search, status, riskLevel, predictionStatus, gitProvider, language, organization, pageRequest
+        );
+
+        List<RepositorySummaryResponse> content = result.getContent().stream()
+                .map(this::toSummaryResponse)
+                .collect(Collectors.toList());
+
+        return PagedRepositoryResponse.builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .first(result.isFirst())
+                .last(result.isLast())
+                .sortBy(sortBy)
+                .sortDirection(sortDir)
+                .build();
+    }
+
+    /**
+     * Returns repositories belonging ONLY to the user identified by {@code email}.
+     * This is the primary listing method used for all authenticated endpoints.
+     * If the user cannot be resolved, returns an empty page.
+     */
+    @Transactional(readOnly = true)
+    public PagedRepositoryResponse findAllByUser(
+            String email,
+            int page, int size, String sortBy, String sortDir,
+            String search, String status, String riskLevel,
+            String predictionStatus, String gitProvider, String language, String organization) {
+
+        Optional<UserEntity> userOpt = userRepository.findByEmail(email)
+                .or(() -> userRepository.findByUsername(email))
+                .or(() -> {
+                    try {
+                        return userRepository.findById(UUID.fromString(email));
+                    } catch (Exception e) {
+                        return Optional.empty();
+                    }
+                });
+        if (userOpt.isEmpty()) {
+            return PagedRepositoryResponse.builder()
+                    .content(List.of()).page(0).size(size)
+                    .totalElements(0).totalPages(0)
+                    .first(true).last(true)
+                    .sortBy(sortBy).sortDirection(sortDir)
+                    .build();
+        }
+
+        UUID userId = userOpt.get().getId();
+        if ("name".equals(sortBy)) sortBy = "repositoryName";
+        Sort sort = Sort.by(
+                "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC,
+                sortBy != null ? sortBy : "createdAt"
+        );
+        PageRequest pageRequest = PageRequest.of(page, size, sort);
+
+        Page<RepositoryEntity> result = repoRepository.findAllByUserWithFilters(
+                userId, search, status, riskLevel, predictionStatus, gitProvider, language, organization, pageRequest
         );
 
         List<RepositorySummaryResponse> content = result.getContent().stream()
@@ -181,6 +241,66 @@ public class RepositoryService {
                 "Repository '" + entity.getRepositoryName() + "' was registered", actor, "REPOSITORY", "INFO");
 
         log.info("Repository created: {} by {}", entityId, actor);
+        return toResponse(entity);
+    }
+
+    /**
+     * Creates a repository and associates it with the user identified by {@code actor} (email).
+     * Falls back to {@code create()} if the user cannot be resolved.
+     */
+    @Transactional
+    public RepositoryResponse createForUser(RepositoryCreateRequest request, String actor) {
+        validationService.validateCreate(request);
+
+        // Resolve the creating user
+        Optional<UserEntity> userOpt = userRepository.findByEmail(actor)
+                .or(() -> userRepository.findByUsername(actor));
+
+        RepositoryEntity entity = RepositoryEntity.builder()
+                .repositoryName(request.getRepositoryName())
+                .description(request.getDescription())
+                .organization(request.getOrganization())
+                .owner(request.getOwner())
+                .repositoryUrl(request.getRepositoryUrl())
+                .gitProvider(request.getGitProvider())
+                .branch(request.getBranch() != null ? request.getBranch() : "main")
+                .technology(request.getTechnology())
+                .language(request.getLanguage())
+                .projectType(request.getProjectType())
+                .visibility(request.getVisibility() != null ? request.getVisibility() : "PRIVATE")
+                .license(request.getLicense())
+                .predictionFrequency(request.getPredictionFrequency() != null ? request.getPredictionFrequency() : "WEEKLY")
+                .autoPredictionEnabled(request.getAutoPredictionEnabled() != null ? request.getAutoPredictionEnabled() : true)
+                .notificationsEnabled(request.getNotificationsEnabled() != null ? request.getNotificationsEnabled() : true)
+                .backgroundSyncEnabled(request.getBackgroundSyncEnabled() != null ? request.getBackgroundSyncEnabled() : true)
+                .reportGenerationEnabled(request.getReportGenerationEnabled() != null ? request.getReportGenerationEnabled() : false)
+                .authTokenHint(request.getAuthTokenHint())
+                .webhookSecret(request.getWebhookSecret())
+                .status("ACTIVE")
+                .predictionStatus("PENDING")
+                .lifecycleStage("ACTIVE")
+                .riskLevel("LOW")
+                .healthScore(0.0)
+                .failureProbability(0.0)
+                .aiConfidence(0.0)
+                .build();
+
+        // Associate with the creating user — critical for per-user data isolation
+        userOpt.ifPresent(entity::setUser);
+
+        entity = repoRepository.save(entity);
+        UUID entityId = Objects.requireNonNull(entity.getId(), "Generated repository ID must not be null");
+        entity = repoRepository.findById(entityId).orElse(entity);
+
+        RepositoryMetricsEntity metrics = RepositoryMetricsEntity.builder()
+                .repositoryId(entityId)
+                .build();
+        metricsRepository.save(metrics);
+
+        syncService.logActivity(entityId, "REPOSITORY_CREATED",
+                "Repository '" + entity.getRepositoryName() + "' was registered", actor, "REPOSITORY", "INFO");
+
+        log.info("Repository created for user {}: {} by {}", userOpt.map(u -> u.getId().toString()).orElse("unknown"), entityId, actor);
         return toResponse(entity);
     }
 
@@ -363,7 +483,30 @@ public class RepositoryService {
 
         log.info("[RepositoryService] findOrCreateByGithubUrl — owner={} repo={} actor={}", owner, repo, actor);
 
+        Optional<UserEntity> userOpt = userRepository.findByEmail(actor)
+                .or(() -> userRepository.findByUsername(actor));
+
         // ── Path A: existing record ──────────────────────────────────────────────
+        Optional<RepositoryEntity> existingOpt = (userOpt.isPresent() 
+                ? repoRepository.findByUser_IdAndRepositoryUrl(userOpt.get().getId(), normalizedUrl) 
+                : Optional.<RepositoryEntity>empty())
+                .or(() -> repoRepository.findByRepositoryUrl(normalizedUrl));
+
+        if (existingOpt.isPresent()) {
+            RepositoryEntity existing = existingOpt.get();
+            if (existing.getUser() == null && userOpt.isPresent()) {
+                existing.setUser(userOpt.get());
+                repoRepository.save(existing);
+            }
+            try {
+                syncService.syncRepository(existing.getId(), actor);
+                return repoRepository.findById(existing.getId()).orElse(existing);
+            } catch (Exception ex) {
+                log.warn("[RepositoryService] Sync existing repository metadata failed: {}", ex.getMessage());
+                return existing;
+            }
+        }
+
         return repoRepository.findByRepositoryUrl(normalizedUrl).orElseGet(() -> {
             log.info("[RepositoryService] Repository not in DB — fetching from GitHub API: {}/{}", owner, repo);
 
@@ -419,6 +562,8 @@ public class RepositoryService {
                     .reportGenerationEnabled(false)
                     .build();
 
+            userOpt.ifPresent(entity::setUser);
+
             entity = repoRepository.save(entity);
             UUID entityId = Objects.requireNonNull(entity.getId(), "Generated repository ID must not be null");
             entity = repoRepository.findById(entityId).orElse(entity);
@@ -465,7 +610,11 @@ public class RepositoryService {
 
     private RepositorySummaryResponse toSummaryResponse(RepositoryEntity e) {
         return RepositorySummaryResponse.builder()
-                .id(e.getId()).repositoryName(e.getRepositoryName()).organization(e.getOrganization())
+                .id(e.getId())
+                // repositoryName is @Column(nullable=false) in the entity but guard defensively here
+                // in case of legacy data or direct DB manipulation.
+                .repositoryName(e.getRepositoryName() != null ? e.getRepositoryName() : "(Unnamed)")
+                .organization(e.getOrganization())
                 .description(e.getDescription()).technology(e.getTechnology()).language(e.getLanguage())
                 .repositoryUrl(e.getRepositoryUrl()).gitProvider(e.getGitProvider()).branch(e.getBranch())
                 .status(e.getStatus()).healthScore(e.getHealthScore()).failureProbability(e.getFailureProbability())

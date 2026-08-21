@@ -1,4 +1,4 @@
-// RiskVision AI Main Application Logic
+// RIVEXA Main Application Logic
 // Extended version: adds auth, projects, predictions, training, notifications, admin pages
 
 let activeThreeInstance = null;
@@ -30,6 +30,7 @@ const routes = {
   '/about': 'page-about',
   '/oauth2/callback': 'page-dashboard',
   '/auth/oauth-success': 'page-dashboard',
+  '/auth/callback': 'page-dashboard',
 };
 
 // ─── Initialize Application ────────────────────────────────────────────────
@@ -82,8 +83,8 @@ function initRouter() {
       ? hashWithoutHash.split('?')[1]
       : (window.location.search ? window.location.search.substring(1) : '');
 
-    // Handle OAuth Callback Route (/oauth2/callback or /auth/oauth-success)
-    if (route === '/oauth2/callback' || route === '/auth/oauth-success') {
+    // Handle OAuth Callback Route (/oauth2/callback, /auth/oauth-success, or /auth/callback)
+    if (route === '/oauth2/callback' || route === '/auth/oauth-success' || route === '/auth/callback') {
       const params = new URLSearchParams(queryStr);
       const token = params.get('token');
       const refreshToken = params.get('refreshToken');
@@ -110,8 +111,8 @@ function initRouter() {
           localStorage.setItem('rv_user', JSON.stringify(user));
           refreshAuthState();
           showToast('Welcome back, ' + (user.full_name || user.username || username || 'User') + '!', 'success');
-          console.log('[OAuth Callback] Session active & profile loaded. Navigating to Dashboard app...');
-          window.location.href = '/dashboard/';
+          console.log('[OAuth Callback] Session active & profile loaded. Redirecting to React Dashboard...');
+          window.location.href = '/dashboard/#/dashboard';
           return;
         } catch (err) {
           console.error('[OAuth Callback] Failed to load user profile via /api/v1/auth/me:', err);
@@ -122,16 +123,14 @@ function initRouter() {
       }
     }
 
-    // Direct /dashboard route handler
+    // Direct /dashboard route handler — redirect logged-in users to React Dashboard
     if (route === '/dashboard' || route === '/dashboard/') {
-      if (isLoggedIn()) {
-        console.log('[Router] Navigating authenticated user to /dashboard/ application...');
-        window.location.href = '/dashboard/';
-        return;
-      } else {
+      if (!isLoggedIn()) {
         window.location.hash = '#/login';
         return;
       }
+      window.location.href = '/dashboard/#/dashboard';
+      return;
     }
 
     // Resolve route fallback
@@ -142,8 +141,8 @@ function initRouter() {
 
     // Redirect auth pages if already logged in
     if (isLoggedIn() && (pageId === 'page-login' || pageId === 'page-register' || pageId === 'page-forgot-password')) {
-      console.log('[Router] User already authenticated. Redirecting to Dashboard app.');
-      window.location.href = '/dashboard/';
+      console.log('[Router] User already authenticated. Redirecting to Dashboard.');
+      window.location.hash = '#/dashboard';
       return;
     }
 
@@ -255,7 +254,7 @@ function getCurrentUser() {
 
 function isAdmin() {
   const user = getCurrentUser();
-  return user && (user.role === 'admin' || user.role === 'superadmin');
+  return user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
 }
 
 function refreshAuthState() {
@@ -274,7 +273,7 @@ function refreshAuthState() {
 
       // Show admin nav link if admin/superadmin
       document.querySelectorAll('.nav-admin').forEach(el => {
-        if (user.role === 'admin' || user.role === 'superadmin') {
+        if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
           el.classList.remove('hidden');
         } else {
           el.classList.add('hidden');
@@ -338,9 +337,22 @@ function bindFormHandlers() {
         localStorage.setItem('rv_user', JSON.stringify(user));
         refreshAuthState();
         showToast('Welcome back, ' + (user.full_name || user.username) + '!', 'success');
-        window.location.hash = '#/dashboard';
+        window.location.href = '/dashboard/#/dashboard';
       } catch (err) {
-        showToast('Login failed: ' + err.message, 'error');
+        let msg = err.message || 'Invalid credentials.';
+        if (msg.includes('HTTP 401') || msg.includes('401')) {
+          msg = 'Invalid email or password.';
+        } else if (msg.includes('HTTP 403') || msg.includes('403')) {
+          msg = 'You do not have permission to access this account.';
+        } else if (msg.includes('HTTP 5') || msg.includes('500')) {
+          msg = 'Authentication service is temporarily unavailable.';
+        } else if (msg.includes('TypeError') || msg.includes('Failed to fetch') || msg.includes('connect')) {
+          msg = 'Unable to connect to the authentication server.';
+        } else {
+          // Clean the [API] prefix if present
+          msg = msg.replace(/^\[API\] [^:]+: /, '');
+        }
+        showToast('Login failed: ' + msg, 'error');
       } finally {
         setButtonLoading(btn, false, 'Authenticate');
       }
@@ -1362,18 +1374,10 @@ window.handleLoginSubmit = async function(event) {
       submitBtn.innerHTML = '<span>Signing In...</span>';
     }
 
-    const { apiFetch, rvGetMe } = await import('./api.js');
-    const res = await apiFetch('/v1/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
+    const { rvLogin, rvGetMe } = await import('./api.js');
+    const res = await rvLogin(email, password);
 
     if (res.access_token) {
-      localStorage.setItem('rv_access_token', res.access_token);
-      if (res.refresh_token) {
-        localStorage.setItem('rv_refresh_token', res.refresh_token);
-      }
-
       try {
         const user = await rvGetMe();
         localStorage.setItem('rv_user', JSON.stringify(user));
@@ -1381,8 +1385,8 @@ window.handleLoginSubmit = async function(event) {
         console.warn('[Login] Profile fetch warning:', e);
       }
 
-      console.log('[Login] Sign-in successful. Redirecting to Dashboard application...');
-      window.location.href = '/dashboard/';
+      console.log('[Login] Sign-in successful. Redirecting to Dashboard...');
+      window.location.hash = '#/dashboard';
     } else {
       throw new Error(res.message || 'Login failed.');
     }

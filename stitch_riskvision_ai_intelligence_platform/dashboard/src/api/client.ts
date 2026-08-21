@@ -50,12 +50,16 @@ function formatError(error: any) {
     type = 'BACKEND_UNAVAILABLE';
     message = 'Spring Boot server is not running';
   } else if (status === 401 || status === 403) {
+    const errorData = error.response?.data;
     if (requestUrl.includes('/auth/login')) {
       type = 'INVALID_CREDENTIALS';
       message = 'Invalid email or password.';
+    } else if (requestUrl.includes('/github/') || errorData?.error?.code?.startsWith('GITHUB_')) {
+      type = errorData?.error?.code || 'GITHUB_ERROR';
+      message = errorData?.error?.message || errorData?.message || 'GitHub service authentication issue.';
     } else {
       type = 'JWT_FAILURE';
-      message = 'Session expired or invalid authentication token.';
+      message = errorData?.message || errorData?.error?.message || 'Session expired or invalid authentication token.';
     }
   } else if (status >= 500) {
     const errorData = error.response?.data;
@@ -139,8 +143,8 @@ function applyCommonInterceptors(client: AxiosInstance) {
     (response) => response,
     async (error) => {
       const originalRequest = error.config;
-
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      const isGithubEndpoint = originalRequest?.url?.includes('/github/') || error.response?.data?.error?.code?.startsWith('GITHUB_');
+      if (error.response?.status === 401 && !originalRequest?._retry && !isGithubEndpoint) {
         if (isRefreshing) {
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject });
@@ -197,11 +201,31 @@ applyCommonInterceptors(mlApiClient);
 applyCommonInterceptors(llmApiClient);
 
 function handleLogout() {
+  // Clear auth tokens and all user-identifying data from localStorage
   localStorage.removeItem('rv_access_token');
   localStorage.removeItem('rv_refresh_token');
   localStorage.removeItem('rv_user');
+  localStorage.removeItem('rivexa_user');
+  localStorage.removeItem('rivexa_token');
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('user');
+
+  // Clear ALL TanStack Query cache so no dashboard statistics survive
+  // a user switch. This prevents cross-user data leakage when a different
+  // user logs in after the current session ends.
+  try {
+    import('../App').then((m) => {
+      if (m?.queryClient?.clear) {
+        m.queryClient.clear();
+      }
+    }).catch(() => {
+      // Ignore — the hash navigation below forces a remount anyway
+    });
+  } catch {
+    // ignore
+  }
+
   if (window.location.hash !== '#/login') {
     window.location.hash = '#/login';
   }
 }
-

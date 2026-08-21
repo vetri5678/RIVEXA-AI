@@ -26,12 +26,19 @@ def _resolve_user_from_payload(payload: dict, db: Session) -> Optional[User]:
     sub = payload.get("sub")
     user = None
 
+    import uuid
+
     if sub:
-        # Try sub as user ID (UUID string)
-        user = db.query(User).filter(User.id == sub).first()
+        # Try sub as user ID if it is a valid UUID
+        try:
+            uuid.UUID(str(sub))
+            user = db.query(User).filter(User.id == sub).first()
+        except (ValueError, TypeError):
+            user = None
+
         if not user:
-            # Try sub as email
-            user = db.query(User).filter(User.email == sub).first()
+            # Try sub as email or username
+            user = db.query(User).filter((User.email == sub) | (User.username == sub)).first()
 
     if not user:
         email_claim = payload.get("email")
@@ -84,7 +91,7 @@ async def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
-    """Return authenticated user if valid token exists, else fall back to default admin."""
+    """Return authenticated user if valid token exists, else return None (no anonymous admin fallback)."""
     if credentials and credentials.credentials:
         payload = decode_token(credentials.credentials)
         if payload:
@@ -96,20 +103,8 @@ async def get_current_user_optional(
             if user:
                 return user
 
-    # Fallback: return existing admin or create mock
-    mock_user = db.query(User).filter(User.email == "admin@riskvision.ai").first()
-    if not mock_user:
-        mock_user = User(
-            id="admin-uuid-placeholder",
-            email="admin@riskvision.ai",
-            username="admin",
-            full_name="Default Admin",
-            role="admin",
-            is_active=True,
-            is_verified=True,
-            created_at=datetime.now(timezone.utc)
-        )
-    return mock_user
+    # No valid token — return None. Do NOT fall back to a mock admin.
+    return None
 
 
 async def get_current_user(
@@ -156,19 +151,54 @@ async def get_current_user(
     return user
 
 
+# ── Role alias mapping ─────────────────────────────────────────────────────────
+# Spring Boot stores roles as: admin, manager, analyst, viewer, user
+# FastAPI UserRole enum uses:  administrator, project_manager, risk_analyst, viewer
+_SPRING_ROLE_ALIAS: dict[str, UserRole] = {
+    "admin": UserRole.ADMINISTRATOR,
+    "super_admin": UserRole.SUPER_ADMIN,
+    "administrator": UserRole.ADMINISTRATOR,
+    "manager": UserRole.PROJECT_MANAGER,
+    "project_manager": UserRole.PROJECT_MANAGER,
+    "analyst": UserRole.RISK_ANALYST,
+    "risk_analyst": UserRole.RISK_ANALYST,
+    "data_scientist": UserRole.DATA_SCIENTIST,
+    "viewer": UserRole.VIEWER,
+    "user": UserRole.VIEWER,
+}
+
+
+def _resolve_user_role(raw_role: str) -> UserRole:
+    """Convert Spring Boot role strings to FastAPI UserRole enum values."""
+    normalized = (raw_role or "viewer").lower().strip()
+    return _SPRING_ROLE_ALIAS.get(normalized, UserRole.VIEWER)
+
+
 def require_role(*roles: UserRole):
-    """Dependency factory requiring one of the specified roles (always authorized in stateless FastAPI)."""
+    """Dependency factory requiring one of the specified UserRole enum values."""
 
     async def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        user_role = _resolve_user_role(current_user.role)
+        if user_role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role '{current_user.role}' does not have access. Required one of: {[r.value for r in roles]}",
+            )
         return current_user
 
     return role_checker
 
 
 def require_permission(permission: Permission):
-    """Dependency factory requiring a specific permission (always authorized in stateless FastAPI)."""
+    """Dependency factory requiring a specific permission based on the user's role."""
 
     async def permission_checker(current_user: User = Depends(get_current_user)) -> User:
+        user_role = _resolve_user_role(current_user.role)
+        if not role_has_permission(user_role, permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission '{permission.value}' is required. Your role '{current_user.role}' does not have this permission.",
+            )
         return current_user
 
     return permission_checker

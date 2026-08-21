@@ -101,25 +101,25 @@ export const DataCleansing: React.FC = () => {
               <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
                 <span className="text-slate-500 text-[10px] block">TOTAL SAMPLES</span>
                 <span className="text-base font-bold text-white mt-1 block">
-                  {cleanseData?.validation_summary?.total_samples_processed ?? 1250}
+                  {cleanseData?.validation_summary?.total_samples_processed ?? '—'}
                 </span>
               </div>
               <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
                 <span className="text-slate-500 text-[10px] block">PASSED SAMPLES</span>
                 <span className="text-base font-bold text-emerald-400 mt-1 block">
-                  {cleanseData?.validation_summary?.passed_samples ?? 1248}
+                  {cleanseData?.validation_summary?.passed_samples ?? '—'}
                 </span>
               </div>
               <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
                 <span className="text-slate-500 text-[10px] block">QUARANTINED</span>
                 <span className="text-base font-bold text-amber-400 mt-1 block">
-                  {cleanseData?.validation_summary?.quarantined_samples ?? 2}
+                  {cleanseData?.validation_summary?.quarantined_samples ?? 0}
                 </span>
               </div>
               <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
                 <span className="text-slate-500 text-[10px] block">RULE CHECKS</span>
                 <span className="text-base font-bold text-purple-400 mt-1 block">
-                  {cleanseData?.validation_summary?.validation_rule_checks ?? 18}
+                  {cleanseData?.validation_summary?.validation_rule_checks ?? '—'}
                 </span>
               </div>
             </div>

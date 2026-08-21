@@ -26,6 +26,7 @@ class AuditService:
             user_id=user_id,
             ip_address=ip_address,
             action=action,
+            event_type=action,
             status=status,
             resource_type=resource_type,
             resource_id=resource_id,

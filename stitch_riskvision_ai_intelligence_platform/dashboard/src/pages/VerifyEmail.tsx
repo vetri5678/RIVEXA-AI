@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import authApi from '../api/auth';
-import { ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Mail, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertCircle, RefreshCw, Mail, ArrowRight } from 'lucide-react';
+import { RivexaLogo } from '../components/common/RivexaLogo';
 
 export const VerifyEmail: React.FC = () => {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
@@ -57,13 +58,7 @@ export const VerifyEmail: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
       <div className="w-full max-w-md z-10">
-        <div className="flex flex-col items-center mb-8">
-          <div className="p-3 bg-blue-600/10 border border-blue-500/20 rounded-xl text-blue-400 mb-3 shadow-sm">
-            <ShieldCheck size={32} />
-          </div>
-          <h1 className="text-xl font-bold text-slate-100 tracking-tight text-center">
-            RiskVision AI
-          </h1>
+        <div className="flex flex-col items-center mb-8">            <RivexaLogo variant="compact" size={34} alt="RIVEXA" />
           <p className="text-xs text-slate-400 font-medium tracking-wide mt-1">
             Email Verification
           </p>

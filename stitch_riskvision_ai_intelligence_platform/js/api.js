@@ -1,5 +1,5 @@
-/**
- * RiskVision AI — Backend API Client
+﻿/**
+ * RIVEXA — Backend API Client
  *
  * Provides typed functions for communicating with the FastAPI backend
  * at http://localhost:8000/api/v1. Handles errors gracefully and returns

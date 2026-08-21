@@ -23,6 +23,7 @@ class AuditLog(Base):
     user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     action: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="success", index=True)
     resource_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     resource_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -3,13 +3,11 @@ package ai.riskvision.graveyard.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 
 import java.time.format.DateTimeFormatter;
@@ -24,6 +22,9 @@ public class EmailService {
 
     @Value("${app.frontend.url:http://localhost:8080}")
     private String frontendUrl;
+
+    @Value("${app.admin.notification-email:${ADMIN_NOTIFICATION_EMAIL:admin@riskvision.ai}}")
+    private String adminNotificationEmail;
 
     public void sendPasswordResetEmail(String toEmail, String otpCode) {
         String resetLink = frontendUrl + "/#/password-reset?otp=" + otpCode;
@@ -79,6 +80,8 @@ public class EmailService {
      * the OAuth redirect flow.
      *
      * @param toEmail           recipient email address
+     * @param userId            internal user ID
+     * @param userEmail         user email address
      * @param displayName       user's full name or username
      * @param loginTime         timestamp of the login event
      * @param provider          OAuth provider name ("Google OAuth", "GitHub OAuth", etc.)
@@ -88,7 +91,8 @@ public class EmailService {
      */
     @Async("emailTaskExecutor")
     public void sendLoginNotificationEmail(
-            String toEmail,
+            String userId,
+            String userEmail,
             String displayName,
             LocalDateTime loginTime,
             String provider,
@@ -97,55 +101,319 @@ public class EmailService {
             String ipAddress) {
 
         String dashboardUrl = frontendUrl + "/#/dashboard";
+        String securityLogsUrl = frontendUrl + "/#/admin/login-activity";
 
-        // Format login time for human-readable display
+        // Format login time
         String formattedTime = loginTime != null
-                ? loginTime.format(DateTimeFormatter.ofPattern("MMMM dd, yyyy  HH:mm:ss")) + " UTC"
+                ? loginTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + " (System Time)"
                 : "Unknown";
 
-        // Build the details table rows
-        String detailsHtml =
-                "<table style=\"width:100%; border-collapse:collapse; font-family:monospace; font-size:13px; color:#e2e8f0;\">"
-                + buildDetailRow("Account",           escapeHtml(toEmail))
-                + buildDetailRow("Login Time",        escapeHtml(formattedTime))
-                + buildDetailRow("Provider",          escapeHtml(provider != null ? provider : "OAuth"))
-                + buildDetailRow("Browser",           escapeHtml(browser != null ? browser : "Unknown"))
-                + buildDetailRow("Operating System",  escapeHtml(operatingSystem != null ? operatingSystem : "Unknown"))
-                + buildDetailRow("IP Address",        escapeHtml(ipAddress != null ? ipAddress : "Unknown"))
-                + "</table>";
+        String authMethod = "Credentials".equalsIgnoreCase(provider) ? "Credentials" : "OAuth2";
 
-        String securityNotice =
-                "<div style=\"margin-top:24px; padding:16px; background-color:#1c1f3a; border-left:4px solid #f59e0b; border-radius:6px;\">"
-                + "<p style=\"color:#fbbf24; font-size:13px; font-weight:bold; margin:0 0 8px 0;\">\u26a0 Not you?</p>"
-                + "<p style=\"color:#94a3b8; font-size:12px; margin:0; line-height:1.6;\">If you did not perform this login, "
-                + "<strong>immediately reset your password</strong> and contact the RiskVision platform administrator. "
-                + "Your account may have been accessed without authorization.</p>"
-                + "</div>";
+        // ── FUTURISTIC HTML TEMPLATE ───────────────────────────────────────────
+        String htmlContent = "<!DOCTYPE html>\n" +
+                "<html>\n" +
+                "<head>\n" +
+                "  <meta charset=\"utf-8\">\n" +
+                "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+                "  <title>🔐 New Login Detected — RiskVision AI</title>\n" +
+                "</head>\n" +
+                "<body style=\"margin: 0; padding: 40px 0; background-color: #050814; font-family: 'Inter', system-ui, -apple-system, sans-serif;\">\n" +
+                "  <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"max-width: 600px; margin: 0 auto; background-color: #0f172a; border: 1px solid rgba(56, 189, 248, 0.15); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3);\">\n" +
+                "    <!-- Header Banner -->\n" +
+                "    <tr>\n" +
+                "      <td style=\"padding: 30px 40px; background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); text-align: center; border-bottom: 1px solid rgba(56, 189, 248, 0.1);\">\n" +
+                "        <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\n" +
+                "          <tr>\n" +
+                "            <td style=\"background-color: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 10px;\">\n" +
+                "              <span style=\"font-size: 24px;\">🔐</span>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "        <h1 style=\"color: #ffffff; font-size: 20px; font-weight: 800; letter-spacing: 2px; margin: 15px 0 5px 0; text-transform: uppercase;\">RISKVISION AI</h1>\n" +
+                "        <p style=\"color: #38bdf8; font-size: 10px; font-weight: 700; letter-spacing: 3px; margin: 0; text-transform: uppercase;\">SECURITY MONITORING SYSTEM</p>\n" +
+                "      </td>\n" +
+                "    </tr>\n" +
+                "    <!-- Content Body -->\n" +
+                "    <tr>\n" +
+                "      <td style=\"padding: 40px;\">\n" +
+                "        <h2 style=\"color: #ffffff; font-size: 18px; font-weight: 700; margin: 0 0 20px 0; text-align: center;\">NEW LOGIN DETECTED</h2>\n" +
+                "        \n" +
+                "        <p style=\"color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 30px 0; text-align: center;\">\n" +
+                "          A new authentication event was detected on your RiskVision AI application.\n" +
+                "        </p>\n" +
+                "\n" +
+                "        <!-- Security Status Badge -->\n" +
+                "        <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom: 30px;\">\n" +
+                "          <tr>\n" +
+                "            <td style=\"background-color: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 30px; padding: 8px 24px; text-align: center;\">\n" +
+                "              <span style=\"color: #10b981; font-size: 12px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;\">SUCCESSFUL LOGIN</span>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "\n" +
+                "        <!-- User Information Card -->\n" +
+                "        <div style=\"background-color: #030712; border-left: 4px solid #7c3aed; border-radius: 8px; padding: 20px; margin-bottom: 24px;\">\n" +
+                "          <h3 style=\"color: #7c3aed; font-size: 12px; font-weight: 800; letter-spacing: 1px; margin: 0 0 15px 0; text-transform: uppercase;\">User Profile Info</h3>\n" +
+                "          <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"font-size: 13px; color: #94a3b8; line-height: 1.8;\">\n" +
+                "            <tr>\n" +
+                "              <td width=\"35%\" style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">User Name:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(displayName) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">User Email:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(userEmail) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">User ID:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0; font-family: monospace;\">" + escapeHtml(userId) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Provider:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(provider) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Auth Method:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(authMethod) + "</td>\n" +
+                "            </tr>\n" +
+                "          </table>\n" +
+                "        </div>\n" +
+                "\n" +
+                "        <!-- Login Details Card -->\n" +
+                "        <div style=\"background-color: #030712; border-left: 4px solid #00d4ff; border-radius: 8px; padding: 20px; margin-bottom: 30px;\">\n" +
+                "          <h3 style=\"color: #38bdf8; font-size: 12px; font-weight: 800; letter-spacing: 1px; margin: 0 0 15px 0; text-transform: uppercase;\">Login Telemetry</h3>\n" +
+                "          <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"font-size: 13px; color: #94a3b8; line-height: 1.8;\">\n" +
+                "            <tr>\n" +
+                "              <td width=\"35%\" style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Date/Time:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(formattedTime) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">IP Address:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0; font-family: monospace;\">" + escapeHtml(ipAddress) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Browser:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(browser) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Operating System:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(operatingSystem) + "</td>\n" +
+                "            </tr>\n" +
+                "          </table>\n" +
+                "        </div>\n" +
+                "\n" +
+                "        <!-- Action Buttons -->\n" +
+                "        <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin: 0 auto 10px auto;\">\n" +
+                "          <tr>\n" +
+                "            <td align=\"center\" style=\"padding: 10px;\">\n" +
+                "              <a href=\"" + dashboardUrl + "\" style=\"display: inline-block; background: linear-gradient(135deg, #38bdf8 0%, #0369a1 100%); color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; padding: 12px 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(56, 189, 248, 0.3); text-transform: uppercase; letter-spacing: 0.5px;\">VIEW ADMIN DASHBOARD</a>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "          <tr>\n" +
+                "            <td align=\"center\" style=\"padding: 10px;\">\n" +
+                "              <a href=\"" + securityLogsUrl + "\" style=\"display: inline-block; background-color: transparent; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 13px; font-weight: 700; text-decoration: none; padding: 11px 30px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px;\">VIEW LOGIN ACTIVITY</a>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "      </td>\n" +
+                "    </tr>\n" +
+                "    <!-- Footer Section -->\n" +
+                "    <tr>\n" +
+                "      <td style=\"padding: 30px 40px; background-color: #020617; text-align: center; border-top: 1px solid rgba(56, 189, 248, 0.05);\">\n" +
+                "        <p style=\"color: #475569; font-size: 11px; line-height: 1.5; margin: 0 0 10px 0;\">\n" +
+                "          This is an automated security notification from RiskVision AI.<br>Do not reply to this automated message.\n" +
+                "        </p>\n" +
+                "        <p style=\"color: #334155; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; margin: 0; text-transform: uppercase;\">\n" +
+                "          © 2026 STITCH RISKVISION. ALL RIGHTS RESERVED.\n" +
+                "        </p>\n" +
+                "      </td>\n" +
+                "    </tr>\n" +
+                "  </table>\n" +
+                "</body>\n" +
+                "</html>";
 
-        String mainContent = detailsHtml + securityNotice;
+        // ── PLAIN TEXT FALLBACK ───────────────────────────────────────────────
+        String plainText = "RISKVISION AI - SECURITY MONITORING SYSTEM\n" +
+                "===========================================\n" +
+                "NEW LOGIN DETECTED\n" +
+                "Status: SUCCESSFUL LOGIN\n\n" +
+                "A new authentication event was detected on your RiskVision AI application.\n\n" +
+                "USER PROFILE INFO:\n" +
+                "-----------------\n" +
+                "Name: " + displayName + "\n" +
+                "Email: " + userEmail + "\n" +
+                "ID: " + userId + "\n" +
+                "Provider: " + provider + "\n" +
+                "Auth Method: " + authMethod + "\n\n" +
+                "LOGIN TELEMETRY:\n" +
+                "---------------\n" +
+                "Date/Time: " + formattedTime + "\n" +
+                "IP Address: " + ipAddress + "\n" +
+                "Browser: " + browser + "\n" +
+                "OS: " + operatingSystem + "\n\n" +
+                "ACTIONS:\n" +
+                "--------\n" +
+                "Admin Dashboard: " + dashboardUrl + "\n" +
+                "Login Activity Logs: " + securityLogsUrl + "\n\n" +
+                "This is an automated security notification from RiskVision AI. Do not reply to this message.";
 
-        String htmlContent = buildEmailBody(
-                "Login Notification — RiskVision AI",
-                "Successful Sign-In Detected",
-                "Hello " + escapeHtml(displayName != null ? displayName : toEmail) + ","
-                + " a successful sign-in to your <strong style=\"color:#00d4ff;\">RiskVision AI</strong> account has been detected.",
-                mainContent,
-                "GO TO DASHBOARD",
-                dashboardUrl,
-                "This is an automated security notification. Do not reply to this email. "
-                + "If you have questions, contact your platform administrator."
-        );
-
-        sendHtmlEmail(toEmail, "RiskVision AI \u2014 Successful Login Notification", htmlContent);
+        sendHtmlEmail(adminNotificationEmail, "🔐 New Login Detected — RiskVision AI", htmlContent, plainText);
     }
 
-    /** Builds a single 2-column detail row for the login info table. */
-    private String buildDetailRow(String label, String value) {
-        return "<tr>"
-                + "<td style=\"padding:8px 12px 8px 0; color:#64748b; white-space:nowrap; vertical-align:top;\">" + label + "</td>"
-                + "<td style=\"padding:8px 0; color:#e2e8f0; word-break:break-all;\">" + value + "</td>"
-                + "</tr>";
+    @Async("emailTaskExecutor")
+    public void sendFailedLoginAlertEmail(
+            String userEmail,
+            String displayName,
+            int failedAttempts,
+            String ipAddress,
+            String browser,
+            String operatingSystem) {
+
+        String dashboardUrl = frontendUrl + "/#/dashboard";
+        String securityLogsUrl = frontendUrl + "/#/admin/login-activity";
+        String formattedTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + " (System Time)";
+
+        // ── FUTURISTIC HTML TEMPLATE (ALERT) ──────────────────────────────────
+        String htmlContent = "<!DOCTYPE html>\n" +
+                "<html>\n" +
+                "<head>\n" +
+                "  <meta charset=\"utf-8\">\n" +
+                "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+                "  <title>⚠️ Security Alert — Multiple Failed Login Attempts</title>\n" +
+                "</head>\n" +
+                "<body style=\"margin: 0; padding: 40px 0; background-color: #050814; font-family: 'Inter', system-ui, -apple-system, sans-serif;\">\n" +
+                "  <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"max-width: 600px; margin: 0 auto; background-color: #0f172a; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3);\">\n" +
+                "    <!-- Header Banner -->\n" +
+                "    <tr>\n" +
+                "      <td style=\"padding: 30px 40px; background: linear-gradient(135deg, #7f1d1d 0%, #0f172a 100%); text-align: center; border-bottom: 1px solid rgba(239, 68, 68, 0.2);\">\n" +
+                "        <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\n" +
+                "          <tr>\n" +
+                "            <td style=\"background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 10px;\">\n" +
+                "              <span style=\"font-size: 24px;\">⚠️</span>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "        <h1 style=\"color: #ffffff; font-size: 20px; font-weight: 800; letter-spacing: 2px; margin: 15px 0 5px 0; text-transform: uppercase;\">RISKVISION AI</h1>\n" +
+                "        <p style=\"color: #ef4444; font-size: 10px; font-weight: 700; letter-spacing: 3px; margin: 0; text-transform: uppercase;\">SECURITY MONITORING SYSTEM</p>\n" +
+                "      </td>\n" +
+                "    </tr>\n" +
+                "    <!-- Content Body -->\n" +
+                "    <tr>\n" +
+                "      <td style=\"padding: 40px;\">\n" +
+                "        <h2 style=\"color: #ffffff; font-size: 18px; font-weight: 700; margin: 0 0 20px 0; text-align: center;\">MULTIPLE FAILED LOGINS DETECTED</h2>\n" +
+                "        \n" +
+                "        <p style=\"color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 30px 0; text-align: center;\">\n" +
+                "          An account lockout has been triggered due to consecutive failed authentication attempts.\n" +
+                "        </p>\n" +
+                "\n" +
+                "        <!-- Security Status Badge -->\n" +
+                "        <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom: 30px;\">\n" +
+                "          <tr>\n" +
+                "            <td style=\"background-color: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 30px; padding: 8px 24px; text-align: center;\">\n" +
+                "              <span style=\"color: #ef4444; font-size: 12px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;\">ACCOUNT TEMPORARILY LOCKED</span>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "\n" +
+                "        <!-- User Information Card -->\n" +
+                "        <div style=\"background-color: #030712; border-left: 4px solid #ef4444; border-radius: 8px; padding: 20px; margin-bottom: 24px;\">\n" +
+                "          <h3 style=\"color: #ef4444; font-size: 12px; font-weight: 800; letter-spacing: 1px; margin: 0 0 15px 0; text-transform: uppercase;\">Target Profile</h3>\n" +
+                "          <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"font-size: 13px; color: #94a3b8; line-height: 1.8;\">\n" +
+                "            <tr>\n" +
+                "              <td width=\"35%\" style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Name:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(displayName) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Email/Username:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(userEmail) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Failed Attempts:</td>\n" +
+                "              <td style=\"color: #ef4444; font-weight: 700; padding: 4px 0;\">" + failedAttempts + "</td>\n" +
+                "            </tr>\n" +
+                "          </table>\n" +
+                "        </div>\n" +
+                "\n" +
+                "        <!-- Login Details Card -->\n" +
+                "        <div style=\"background-color: #030712; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 30px;\">\n" +
+                "          <h3 style=\"color: #f59e0b; font-size: 12px; font-weight: 800; letter-spacing: 1px; margin: 0 0 15px 0; text-transform: uppercase;\">Telemetry of Last Attempt</h3>\n" +
+                "          <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"font-size: 13px; color: #94a3b8; line-height: 1.8;\">\n" +
+                "            <tr>\n" +
+                "              <td width=\"35%\" style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Timestamp:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(formattedTime) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">IP Address:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0; font-family: monospace;\">" + escapeHtml(ipAddress) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Browser:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(browser) + "</td>\n" +
+                "            </tr>\n" +
+                "            <tr>\n" +
+                "              <td style=\"color: #4b5563; font-weight: 600; padding: 4px 0;\">Operating System:</td>\n" +
+                "              <td style=\"color: #f3f4f6; font-weight: 500; padding: 4px 0;\">" + escapeHtml(operatingSystem) + "</td>\n" +
+                "            </tr>\n" +
+                "          </table>\n" +
+                "        </div>\n" +
+                "\n" +
+                "        <!-- Action Buttons -->\n" +
+                "        <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin: 0 auto 10px auto;\">\n" +
+                "          <tr>\n" +
+                "            <td align=\"center\" style=\"padding: 10px;\">\n" +
+                "              <a href=\"" + dashboardUrl + "\" style=\"display: inline-block; background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; padding: 12px 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3); text-transform: uppercase; letter-spacing: 0.5px;\">VIEW ADMIN DASHBOARD</a>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "          <tr>\n" +
+                "            <td align=\"center\" style=\"padding: 10px;\">\n" +
+                "              <a href=\"" + securityLogsUrl + "\" style=\"display: inline-block; background-color: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; font-size: 13px; font-weight: 700; text-decoration: none; padding: 11px 30px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px;\">VIEW LOGIN ACTIVITY</a>\n" +
+                "            </td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "      </td>\n" +
+                "    </tr>\n" +
+                "    <!-- Footer Section -->\n" +
+                "    <tr>\n" +
+                "      <td style=\"padding: 30px 40px; background-color: #020617; text-align: center; border-top: 1px solid rgba(239, 68, 68, 0.05);\">\n" +
+                "        <p style=\"color: #475569; font-size: 11px; line-height: 1.5; margin: 0 0 10px 0;\">\n" +
+                "          This is an automated security notification from RiskVision AI.<br>Do not reply to this automated message.\n" +
+                "        </p>\n" +
+                "        <p style=\"color: #334155; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; margin: 0; text-transform: uppercase;\">\n" +
+                "          © 2026 STITCH RISKVISION. ALL RIGHTS RESERVED.\n" +
+                "        </p>\n" +
+                "      </td>\n" +
+                "    </tr>\n" +
+                "  </table>\n" +
+                "</body>\n" +
+                "</html>";
+
+        // ── PLAIN TEXT FALLBACK ───────────────────────────────────────────────
+        String plainText = "RISKVISION AI - SECURITY ALERT\n" +
+                "================================\n" +
+                "MULTIPLE FAILED LOGINS DETECTED\n" +
+                "Status: ACCOUNT TEMPORARILY LOCKED\n\n" +
+                "An account lockout has been triggered due to consecutive failed authentication attempts.\n\n" +
+                "TARGET PROFILE:\n" +
+                "--------------\n" +
+                "Name: " + displayName + "\n" +
+                "Email: " + userEmail + "\n" +
+                "Failed Attempts: " + failedAttempts + "\n\n" +
+                "TELEMETRY OF LAST ATTEMPT:\n" +
+                "--------------------------\n" +
+                "Timestamp: " + formattedTime + "\n" +
+                "IP Address: " + ipAddress + "\n" +
+                "Browser: " + browser + "\n" +
+                "OS: " + operatingSystem + "\n\n" +
+                "ACTIONS:\n" +
+                "--------\n" +
+                "Admin Dashboard: " + dashboardUrl + "\n" +
+                "Login Activity Logs: " + securityLogsUrl + "\n\n" +
+                "This is an automated security notification from RiskVision AI. Do not reply to this message.";
+
+        sendHtmlEmail(adminNotificationEmail, "⚠️ Security Alert — Multiple Failed Login Attempts", htmlContent, plainText);
     }
+
+
 
     /** Minimal HTML escaping to prevent injection in dynamically built email content. */
     private String escapeHtml(String input) {
@@ -246,20 +514,27 @@ public class EmailService {
      */
     private boolean isDeliverableEmail(String email) {
         if (email == null || !email.contains("@")) return false;
+        
         String domain = email.substring(email.lastIndexOf('@') + 1).toLowerCase();
-        // Block known fake/internal domains
+
+        // Block known non-routable/dummy/internal domains
         if (domain.equals("riskvision.ai") || domain.equals("example.com")
                 || domain.equals("localhost") || domain.equals("test.com")
                 || domain.equals("mailtest.com") || domain.endsWith(".local")
-                || domain.equals("placeholder.com")) {
-            log.warn("Skipping email to {} — domain '{}' has no real mail server. " +
-                     "Update app.admin.email in application.properties to use a real address.", email, domain);
+                || domain.equals("placeholder.com") || domain.endsWith("noreply.github.com")) {
+            log.info("ℹ️ [LOGIN_NOTIFICATION_SKIPPED_DUMMY_DOMAIN] Skipping email dispatch to {} — domain '{}' has no inbound mail server. " +
+                     "Set ADMIN_NOTIFICATION_EMAIL in environment variables to a real address to enable live SMTP delivery.", email, domain);
             return false;
         }
+
         return true;
     }
 
     private void sendHtmlEmail(String to, String subject, String htmlContent) {
+        sendHtmlEmail(to, subject, htmlContent, "Please view this email in an HTML-compatible email client.");
+    }
+
+    private void sendHtmlEmail(String to, String subject, String htmlContent, String plainTextContent) {
         // Skip sending to addresses on domains with no real mail server to avoid bounce errors
         if (!isDeliverableEmail(to)) {
             return;
@@ -270,11 +545,11 @@ public class EmailService {
 
             helper.setTo(to);
             helper.setSubject(subject);
-            helper.setText(htmlContent, true);
+            helper.setText(plainTextContent, htmlContent);
 
             mailSender.send(message);
             log.info("Email successfully sent to {}", to);
-        } catch (MessagingException | MailException e) {
+        } catch (Exception e) {
             // Log the failure but do NOT throw — email delivery failures should never crash
             // the main request flow (login, registration, OAuth callback, etc.)
             log.error("Failed to send email to {}: {}. " +

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="rv-eye-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00aaff"/>
+      <stop offset="100%" stop-color="#0044ff"/>
+    </linearGradient>
+    <linearGradient id="rv-inner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00d4ff"/>
+      <stop offset="100%" stop-color="#0066ff"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="strong-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Eye outer path - the teardrop/lens shape -->
+  <path d="M 12 60 Q 60 8 108 60 Q 60 112 12 60 Z"
+    fill="none" stroke="url(#rv-eye-grad)" stroke-width="3.5" filter="url(#glow)"/>
+
+  <!-- Scan line horizontals -->
+  <line x1="18" y1="60" x2="32" y2="60" stroke="#0088ee" stroke-width="1.5" opacity="0.8"/>
+  <line x1="88" y1="60" x2="102" y2="60" stroke="#0088ee" stroke-width="1.5" opacity="0.8"/>
+
+  <!-- Concentric tech rings -->
+  <circle cx="60" cy="60" r="30" fill="none" stroke="url(#rv-eye-grad)" stroke-width="2" opacity="0.5"/>
+  <circle cx="60" cy="60" r="22" fill="none" stroke="url(#rv-eye-grad)" stroke-width="1.2" opacity="0.35"
+    stroke-dasharray="3 5"/>
+
+  <!-- Tick marks on ring -->
+  <line x1="60" y1="30" x2="60" y2="25" stroke="#0099dd" stroke-width="1.5" opacity="0.7"/>
+  <line x1="60" y1="90" x2="60" y2="95" stroke="#0099dd" stroke-width="1.5" opacity="0.7"/>
+
+  <!-- R+V monogram -->
+  <!-- R -->
+  <path d="M 46 49 L 46 71 M 46 49 L 57 49 Q 62 49 62 55 Q 62 61 57 61 L 46 61 M 57 61 L 63 71"
+    fill="none" stroke="url(#rv-inner-grad)" stroke-width="3" stroke-linecap="round"
+    stroke-linejoin="round" filter="url(#glow)"/>
+  <!-- V -->
+  <path d="M 65 49 L 72 71 L 79 49"
+    fill="none" stroke="url(#rv-inner-grad)" stroke-width="3" stroke-linecap="round"
+    stroke-linejoin="round" filter="url(#glow)"/>
+
+  <!-- Pupil glow dot -->
+  <circle cx="60" cy="60" r="4.5" fill="#00d4ff" filter="url(#strong-glow)"/>
+  <circle cx="60" cy="60" r="2.5" fill="#ffffff" opacity="0.9"/>
+</svg>

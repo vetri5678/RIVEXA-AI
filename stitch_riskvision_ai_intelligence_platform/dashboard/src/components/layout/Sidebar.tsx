@@ -6,7 +6,6 @@ import {
   Cpu,
   User,
   LogOut,
-  ShieldCheck,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -15,13 +14,23 @@ import {
   Hammer,
   CheckCircle,
   FileText,
+  X,
+  ShieldCheck,
+  Eye,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+
+import { getStoredUser } from '../../utils/auth';
+import { RivexaLogo } from '../common/RivexaLogo';
+import { useOverview } from '../../hooks/useDashboard';
+import { useGithubConnectionStatus } from '../../hooks/useRepository';
 
 interface SidebarProps {
   onLogout: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 interface NavItem {
@@ -30,6 +39,7 @@ interface NavItem {
   path: string;
   badge?: string;
   live?: boolean;
+  requiredRole?: string[];
 }
 
 interface MenuSection {
@@ -41,15 +51,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   collapsed = false,
   onToggleCollapse,
+  mobileOpen = false,
+  onCloseMobile,
 }) => {
   const location = useLocation();
+  const { data: overview } = useOverview();
+  const { data: githubConn } = useGithubConnectionStatus();
+  const repoCount = overview?.total_projects ?? githubConn?.repositoryCount ?? 0;
 
   const menuSections: MenuSection[] = [
     {
       group: 'INTELLIGENCE OS',
       items: [
         { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
-        { name: 'Repositories', icon: GitBranch, path: '/repositories', badge: '12' },
+        { name: 'Repositories', icon: GitBranch, path: '/repositories', badge: repoCount > 0 ? String(repoCount) : undefined },
       ],
     },
     {
@@ -61,6 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { name: 'Model Engine', icon: Cpu, path: '/pipeline/model-engine' },
         { name: 'Risk Inference', icon: CheckCircle, path: '/pipeline/inference' },
         { name: 'SHAP (XAI)', icon: FileText, path: '/pipeline/shap' },
+        { name: 'Code Vision AI', icon: Eye, path: '/code-vision' },
       ],
     },
     {
@@ -68,6 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { name: 'Telemetry Stream', icon: Activity, path: '/telemetry', live: true },
         { name: 'System Core', icon: Cpu, path: '/system' },
+        { name: 'Login Activity', icon: ShieldCheck, path: '/admin/login-activity', requiredRole: ['ADMIN', 'SUPER_ADMIN'] },
       ],
     },
     {
@@ -78,46 +95,61 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  const userRaw = localStorage.getItem('rv_user');
-  const user = userRaw ? JSON.parse(userRaw) : { full_name: 'Enterprise Admin', role: 'SUPER_ADMIN', email: '' };
+  const user = getStoredUser();
+
+  const filteredMenuSections = menuSections.map(section => ({
+    ...section,
+    items: section.items.filter(item => {
+      if (!item.requiredRole) return true;
+      const userRole = user.role ? String(user.role).toUpperCase() : 'USER';
+      return item.requiredRole.includes(userRole);
+    })
+  })).filter(section => section.items.length > 0);
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-30 h-screen bg-[#0B1220]/90 backdrop-blur-2xl border-r border-white/[0.08] flex flex-col transition-all duration-300 shadow-2xl select-none ${
-        collapsed ? 'w-16' : 'w-64'
-      }`}
+      className={`fixed left-0 top-0 z-50 h-screen bg-[#0B1220]/95 backdrop-blur-2xl border-r border-white/[0.08] flex flex-col transition-all duration-300 shadow-2xl select-none lg:translate-x-0 ${
+        mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
+      } ${collapsed ? 'lg:w-16' : 'lg:w-64'}`}
     >
       {/* Brand & Workspace Header */}
       <div className="h-16 px-4 border-b border-white/[0.06] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="relative flex items-center justify-center p-2 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/10 border border-blue-500/30 text-blue-400 shrink-0 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-            <ShieldCheck size={20} className="text-[#38BDF8]" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          </div>
-          {!collapsed && (
-            <div className="whitespace-nowrap">
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-sm font-extrabold text-white tracking-tight font-sans">
-                  RiskVision <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">AI</span>
-                </h1>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">v2.4</span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-mono font-medium tracking-wide uppercase">
-                Predictive Risk OS
-              </p>
+          {collapsed && !mobileOpen ? (
+            /* Collapsed: icon only */
+            <RivexaLogo variant="icon" size={30} alt="RIVEXA" />
+          ) : (
+            /* Expanded: compact logo with wordmark + version badge */
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              <RivexaLogo variant="compact" size={28} alt="RIVEXA" />
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">v2.4</span>
             </div>
           )}
         </div>
 
-        {onToggleCollapse && (
-          <button
-            onClick={onToggleCollapse}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.08] rounded-lg transition-all duration-200 cursor-pointer"
-            aria-label={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          >
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {/* Mobile Close Button */}
+          {onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="lg:hidden p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.08] rounded-lg transition-all cursor-pointer"
+              aria-label="Close Sidebar"
+            >
+              <X size={18} />
+            </button>
+          )}
+
+          {/* Desktop Collapse Button */}
+          {onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className="hidden lg:flex p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.08] rounded-lg transition-all duration-200 cursor-pointer"
+              aria-label={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            >
+              {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Workspace Selector (Expanded view) */}
@@ -130,7 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="truncate">
                 <p className="text-xs font-semibold text-slate-200 group-hover:text-white transition-colors truncate">Enterprise Workspace</p>
-                <p className="text-[10px] text-slate-400 truncate font-mono">12 Repositories Active</p>
+                <p className="text-[10px] text-slate-400 truncate font-mono">{repoCount} Repositories Active</p>
               </div>
             </div>
             <Layers size={13} className="text-slate-500 group-hover:text-blue-400 transition-colors shrink-0" />
@@ -140,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Links Grouping */}
       <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto no-scrollbar">
-        {menuSections.map((section, idx) => (
+        {filteredMenuSections.map((section, idx) => (
           <div key={idx} className="space-y-1">
             {!collapsed && (
               <p className="px-3 text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-500 mb-1">
@@ -153,6 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <a
                   key={item.name}
                   href={item.path === '/' ? '#/' : `#${item.path}`}
+                  onClick={onCloseMobile}
                   title={collapsed ? item.name : undefined}
                   className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
                     isActive

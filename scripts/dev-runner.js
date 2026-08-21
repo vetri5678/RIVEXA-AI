@@ -15,26 +15,31 @@ const PORTS = {
   fastapi: 8000
 };
 
+const isWin = process.platform === 'win32';
+
 const SERVICES = {
   springboot: {
     name: 'Spring Boot Backend',
     cwd: path.join(rootDir, 'stitch_riskvision_ai_intelligence_platform', 'riskvision_ai_springboot_backend'),
-    command: 'mvn',
+    command: isWin ? 'mvn.cmd' : 'mvn',
     args: ['spring-boot:run'],
-    healthCheck: 'http://localhost:8080/api/v1/health'
+    healthCheck: 'http://127.0.0.1:8080/api/v1/health',
+    useShell: true
   },
   fastapi: {
     name: 'FastAPI Prediction Engine',
     cwd: path.join(rootDir, 'stitch_riskvision_ai_intelligence_platform', 'riskvision_ai_backend'),
     command: path.join(rootDir, 'stitch_riskvision_ai_intelligence_platform', 'riskvision_ai_backend', '.venv', 'Scripts', 'python.exe'),
     args: ['-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8000'],
-    healthCheck: 'http://localhost:8000/'
+    healthCheck: 'http://127.0.0.1:8000/health',
+    useShell: false
   },
   frontend: {
     name: 'Vite React Frontend',
     cwd: rootDir,
-    command: 'npx',
-    args: ['vite', 'stitch_riskvision_ai_intelligence_platform']
+    command: isWin ? 'npx.cmd' : 'npx',
+    args: ['vite', 'stitch_riskvision_ai_intelligence_platform'],
+    useShell: true
   }
 };
 
@@ -60,15 +65,21 @@ function log(service, message, type = 'info') {
 }
 
 // ── Helper: Check if a port is in use ──
-function checkPort(port) {
+function checkPortOnHost(port, host) {
   return new Promise((resolve) => {
-    const server = http.createServer().listen(port, 'localhost', () => {
+    const server = http.createServer().listen(port, host, () => {
       server.close(() => resolve(false));
     });
     server.on('error', () => {
       resolve(true);
     });
   });
+}
+
+async function checkPort(port) {
+  const inUseWildcard = await checkPortOnHost(port, '0.0.0.0');
+  const inUseLoopback = await checkPortOnHost(port, '127.0.0.1');
+  return inUseWildcard || inUseLoopback;
 }
 
 // ── Helper: Graceful exit ──
@@ -165,20 +176,31 @@ function forceKillPort(port) {
         const pids = new Set();
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
-          const pid = parts[parts.length - 1];
-          if (pid && !isNaN(pid) && pid !== '0') {
-            pids.add(pid);
+          const localAddr = parts[1];
+          if (localAddr && (localAddr.endsWith(`:${port}`) || localAddr.endsWith(`[::]:${port}`))) {
+            const pid = parts[parts.length - 1];
+            if (pid && !isNaN(pid) && pid !== '0') {
+              pids.add(pid);
+            }
           }
         }
+        if (pids.size === 0) {
+          resolve(true);
+          return;
+        }
+        let killedCount = 0;
         for (const pid of pids) {
           log('system', `Killing PID ${pid} listening on port ${port}...`, 'warn');
-          try {
-            exec(`taskkill /F /PID ${pid}`, () => resolve(true));
-            return;
-          } catch (e) {}
+          exec(`taskkill /F /PID ${pid}`, () => {
+            killedCount++;
+            if (killedCount === pids.size) {
+              resolve(true);
+            }
+          });
         }
+      } else {
+        resolve(true);
       }
-      resolve(true);
     });
   });
 }
@@ -187,28 +209,35 @@ function forceKillPort(port) {
 function startService(key, cfg) {
   return new Promise((resolve) => {
     log('system', `Launching ${cfg.name}...`);
-    let cmd = process.platform === 'win32' && cfg.command === 'mvn' ? 'mvn.cmd' : cfg.command;
-    if (process.platform === 'win32' && cmd.includes(' ')) {
-      cmd = `"${cmd}"`;
-    }
-    const child = spawn(cmd, cfg.args, {
+    const child = spawn(cfg.command, cfg.args, {
       cwd: cfg.cwd,
-      detached: true,
-      shell: true
+      detached: false,
+      shell: cfg.useShell ?? true
     });
 
     child.name = cfg.name;
+    child.exited = false;
+    child.exitCode = null;
+    child.recentLogs = [];
     children.push(child);
 
     child.stdout.on('data', (data) => {
-      log(key, data.toString());
+      const str = data.toString();
+      log(key, str);
+      child.recentLogs.push(str);
+      if (child.recentLogs.length > 30) child.recentLogs.shift();
     });
 
     child.stderr.on('data', (data) => {
-      log(key, data.toString(), 'error');
+      const str = data.toString();
+      log(key, str, 'error');
+      child.recentLogs.push(str);
+      if (child.recentLogs.length > 30) child.recentLogs.shift();
     });
 
     child.on('exit', (code) => {
+      child.exited = true;
+      child.exitCode = code;
       log(key, `${cfg.name} exited with code ${code}`, code === 0 ? 'info' : 'error');
     });
 
@@ -218,25 +247,39 @@ function startService(key, cfg) {
 }
 
 // ── Phase 4: Wait for Health ──
-function pollHealth(url, timeoutMs = 60000) {
+function pollHealth(child, url, timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
+    let attempts = 0;
     const interval = setInterval(() => {
+      attempts++;
+
+      if (child && child.exited) {
+        clearInterval(interval);
+        const lastOutput = child.recentLogs ? child.recentLogs.slice(-10).join('\n') : '';
+        log('system', `🚨 ${child.name} process exited with code ${child.exitCode}! Stopping health polling immediately.`, 'error');
+        reject(new Error(`${child.name} failed to start (exit code ${child.exitCode}). See startup exception above.\n${lastOutput}`));
+        return;
+      }
+
       if (Date.now() - start > timeoutMs) {
         clearInterval(interval);
-        reject(new Error(`Timeout waiting for health endpoint: ${url}`));
+        reject(new Error(`Timeout waiting for health endpoint after ${attempts} attempts: ${url}`));
         return;
       }
 
       http.get(url, (res) => {
         if (res.statusCode === 200) {
           clearInterval(interval);
+          log('system', `[SYSTEM] Health check passed: ${url} (HTTP ${res.statusCode})`);
           resolve(true);
+        } else {
+          log('system', `[SYSTEM] Health check attempt ${attempts} returned HTTP ${res.statusCode} for ${url}`);
         }
-      }).on('error', () => {
-        // Silent catch while waiting
+      }).on('error', (err) => {
+        log('system', `[SYSTEM] Health check attempt ${attempts} failed (${err.code || err.message}) for ${url}`);
       });
-    }, 2000);
+    }, 2500);
   });
 }
 
@@ -246,17 +289,17 @@ async function main() {
   await checkConflicts();
 
   log('system', '=== Phase 3: Launching Services ===');
-  await startService('springboot', SERVICES.springboot);
-  await startService('fastapi', SERVICES.fastapi);
+  const sbChild = await startService('springboot', SERVICES.springboot);
+  const fastapiChild = await startService('fastapi', SERVICES.fastapi);
 
   log('system', '=== Phase 4: Waiting for Health Checks ===');
   try {
     log('system', 'Waiting for Spring Boot backend to be healthy at http://localhost:8080/api/v1/health...');
-    await pollHealth(SERVICES.springboot.healthCheck, 180000);
+    await pollHealth(sbChild, SERVICES.springboot.healthCheck, 180000);
     log('system', '✅ Spring Boot backend is healthy!');
 
     log('system', 'Waiting for FastAPI prediction engine to be healthy at http://localhost:8000/...');
-    await pollHealth(SERVICES.fastapi.healthCheck, 120000);
+    await pollHealth(fastapiChild, SERVICES.fastapi.healthCheck, 120000);
     log('system', '✅ FastAPI engine is healthy!');
 
     log('system', '=== Phase 5: Starting Vite Frontend ===');

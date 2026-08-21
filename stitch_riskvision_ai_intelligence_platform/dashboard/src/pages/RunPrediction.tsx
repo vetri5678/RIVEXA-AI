@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
-import { useRepositories } from '../hooks/useRepository';
-import { useRunPredictionMutation } from '../hooks/useDashboard';
-import type { RepositorySummary } from '../types/repository';
+import {
+  useGithubUserRepositories,
+  useGithubConnectionStatus,
+  useDisconnectGithub,
+} from '../hooks/useRepository';
+import GitHubDisconnectModal from '../components/common/GitHubDisconnectModal';
+import { repositoryApi } from '../api/repository';
+import type { GithubRepository } from '../types/repository';
 import {
   Zap,
   Search,
-  Database,
   CheckCircle2,
   Loader2,
   AlertTriangle,
@@ -15,10 +19,15 @@ import {
   Calendar,
   ShieldAlert,
   ChevronRight,
-  GitBranch,
   RefreshCw,
   LayoutDashboard,
+  Lock,
+  Globe,
+  Code2,
+  Unplug,
 } from 'lucide-react';
+import { FaGithub } from 'react-icons/fa';
+import { getConnectGitHubUrl } from '../utils/auth';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -32,12 +41,12 @@ interface PipelineStage {
 // ── Pipeline Stage Definitions ─────────────────────────────────────────────────
 
 const PIPELINE_STAGES: PipelineStage[] = [
-  { id: 'repo_loaded',      label: 'Repository Loaded',          description: 'Repository metadata validated from database',     durationMs: 800  },
-  { id: 'repo_cloned',      label: 'Repository Cloned',          description: 'Source code fetched from Git provider',           durationMs: 2200 },
+  { id: 'repo_loaded',      label: 'Repository Loaded',          description: 'GitHub repository metadata validated',            durationMs: 800  },
+  { id: 'repo_cloned',      label: 'Repository Cloned',          description: 'Source code fetched from GitHub API',            durationMs: 2200 },
   { id: 'feature_extract',  label: 'Feature Extraction',         description: 'Commit history and issue metrics extracted',      durationMs: 2800 },
   { id: 'data_preprocess',  label: 'Data Preprocessing',         description: 'Normalizing and scaling feature vectors',         durationMs: 1800 },
-  { id: 'model_loading',    label: 'Model Loading',              description: 'RandomForest and XGBoost models initialized',     durationMs: 1200 },
-  { id: 'rf_prediction',    label: 'RF/XGBoost Prediction',      description: 'Ensemble inference across trained models',        durationMs: 2500 },
+  { id: 'model_loading',    label: 'Model Loading',              description: 'XGBoost model initialized',                      durationMs: 1200 },
+  { id: 'xgb_prediction',   label: 'XGBoost Prediction',         description: 'XGBoost model inference for risk score & probability', durationMs: 2500 },
   { id: 'shap',             label: 'SHAP Explainability',        description: 'Generating SHAP values for feature attribution', durationMs: 2000 },
   { id: 'saving',           label: 'Saving Results',             description: 'Persisting prediction to database',               durationMs: 900  },
   { id: 'report',           label: 'Report Generation',          description: 'Assembling prediction report and insights',       durationMs: 800  },
@@ -45,22 +54,31 @@ const PIPELINE_STAGES: PipelineStage[] = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-const getRiskBadgeClass = (level: string) => {
-  switch (level) {
-    case 'CRITICAL': return 'bg-rose-500/20 text-rose-400 border border-rose-500/30';
-    case 'HIGH':     return 'bg-orange-500/20 text-orange-400 border border-orange-500/30';
-    case 'MEDIUM':   return 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
-    default:         return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-  }
-};
-
 const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return 'Never scanned';
+  if (!dateStr) return 'Recently updated';
   try {
     return new Date(dateStr).toLocaleDateString(undefined, {
       month: 'short', day: 'numeric', year: 'numeric',
     });
-  } catch { return 'Unknown'; }
+  } catch { return 'Recently updated'; }
+};
+
+const getErrorMessage = (error: unknown): string => {
+  if (!error) return 'Unable to fetch GitHub repositories.';
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const res = (error as any).response;
+    const data = res?.data;
+    if (data?.error?.message) return data.error.message;
+    if (data?.message && data.message !== 'Internal Server Error' && data.message !== 'An unexpected error occurred') return data.message;
+    if (typeof data?.error === 'string' && data.error !== 'Internal Server Error' && data.error !== 'An unexpected error occurred') return data.error;
+    if (data?.detail && data.detail !== 'Internal Server Error') return data.detail;
+    if (res?.status === 401) return 'GitHub connection required or expired. Please connect GitHub below.';
+    if (res?.status === 403) return 'GitHub repository access denied. Please reconnect GitHub with repository access.';
+    if (res?.status === 429) return 'GitHub API rate limit reached. Please try again later.';
+    if (res?.status === 500) return 'GitHub repository service encountered an error. Please click Reconnect GitHub to re-authorize.';
+  }
+  if (error instanceof Error && error.message !== 'Internal Server Error') return error.message;
+  return 'GitHub connection required or expired. Please connect GitHub below.';
 };
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -71,36 +89,79 @@ export const RunPrediction: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [repoSearch, setRepoSearch]   = useState('');
-  const [selectedRepo, setSelectedRepo] = useState<RepositorySummary | null>(null);
+  const [selectedRepo, setSelectedRepo] = useState<GithubRepository | null>(null);
   const [phase, setPhase]               = useState<RunPhase>('select');
   const [currentStageIdx, setCurrentStageIdx] = useState(-1);
   const [completedStages, setCompletedStages] = useState<Set<number>>(new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch repositories
-  const { data: repoData, isLoading: reposLoading, isError: reposError, refetch: refetchRepos } =
-    useRepositories({ size: 100 });
-  const runMutation = useRunPredictionMutation();
+  // Fetch connection status (Sole Source of Truth)
+  const { data: connectionStatus, isLoading: statusLoading } = useGithubConnectionStatus();
+  const isConnected = connectionStatus?.connected ?? false;
+  const githubUsername = connectionStatus?.githubUsername;
 
-  const allRepos: RepositorySummary[] = repoData?.content ?? [];
-  const filteredRepos = allRepos.filter(
-    (r) =>
-      r.repositoryName.toLowerCase().includes(repoSearch.toLowerCase()) ||
-      (r.repositoryUrl && r.repositoryUrl.toLowerCase().includes(repoSearch.toLowerCase()))
-  );
+  const disconnectMutation = useDisconnectGithub();
 
-  // Auto-select if exactly one repository
+  // Fetch live GitHub user repositories (enabled only when connected)
+  const {
+    data: githubData,
+    isLoading: reposLoading,
+    isError: reposError,
+    error: githubError,
+    refetch: refetchRepos,
+  } = useGithubUserRepositories();
+
+  const allRepos: GithubRepository[] = isConnected ? (githubData?.repositories ?? []) : [];
+  const repoCount = isConnected ? allRepos.length : 0;
+
+  // Filtering against dynamic repository list
+  const search = repoSearch.toLowerCase().trim();
+  const filteredRepos = allRepos.filter((r) => {
+    const name = r.name ?? '';
+    const fullName = r.full_name ?? '';
+    const owner = r.owner ?? '';
+    const desc = r.description ?? '';
+    const lang = r.language ?? '';
+    const url = r.html_url ?? '';
+    return (
+      name.toLowerCase().includes(search) ||
+      fullName.toLowerCase().includes(search) ||
+      owner.toLowerCase().includes(search) ||
+      desc.toLowerCase().includes(search) ||
+      lang.toLowerCase().includes(search) ||
+      url.toLowerCase().includes(search)
+    );
+  });
+
+  // Auto-select if exactly one repository exists
   useEffect(() => {
-    if (allRepos.length === 1 && !selectedRepo) {
+    if (isConnected && allRepos.length === 1 && !selectedRepo) {
       setSelectedRepo(allRepos[0]);
     }
-  }, [allRepos]);
+    if (!isConnected && selectedRepo) {
+      setSelectedRepo(null);
+    }
+  }, [isConnected, allRepos, selectedRepo]);
 
   // Cleanup timers on unmount
   useEffect(() => {
     return () => { if (stageTimerRef.current) clearTimeout(stageTimerRef.current); };
   }, []);
+
+  const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
+
+  const handleConfirmDisconnect = async () => {
+    try {
+      await disconnectMutation.mutateAsync();
+      setSelectedRepo(null);
+      setIsDisconnectModalOpen(false);
+    } catch (err) {
+      console.error('[RunPrediction] Disconnect failed:', err);
+    }
+  };
+
+  const connectGitHubUrl = getConnectGitHubUrl();
 
   // ── Animated progress stages ───────────────────────────────────────────────
 
@@ -130,37 +191,55 @@ export const RunPrediction: React.FC = () => {
   // ── Run prediction ─────────────────────────────────────────────────────────
 
   const handleRunPrediction = async () => {
-    if (!selectedRepo) return;
+    if (!isConnected) {
+      setErrorMessage('GitHub account is not connected. Please connect GitHub before running predictions.');
+      setPhase('error');
+      return;
+    }
+    if (!selectedRepo) {
+      setErrorMessage('Please select a repository before running a prediction.');
+      setPhase('error');
+      return;
+    }
+    if (!selectedRepo.html_url) {
+      setErrorMessage('Selected repository URL is missing. Please select the repository again.');
+      setPhase('error');
+      return;
+    }
 
     setPhase('running');
     setCurrentStageIdx(0);
     setCompletedStages(new Set());
     setErrorMessage(null);
 
-    // Start stage animation while waiting for the API (~15 sec total budget)
+    // Start stage animation (~14 sec budget)
     animateStages(14000);
 
     try {
-      const result = await runMutation.mutateAsync(selectedRepo.id);
-      // Clear timers
+      // Execute prediction against real selected GitHub repository
+      const result = await repositoryApi.predictByGithubUrl(selectedRepo.html_url);
+      
       if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
-      // Mark all stages complete
       setCompletedStages(new Set(PIPELINE_STAGES.map((_, i) => i)));
       setCurrentStageIdx(PIPELINE_STAGES.length - 1);
 
-      // Brief pause so user sees all stages green before navigating
       setTimeout(() => {
-        const predictionId = result?.predictionId ?? result?.id ?? null;
+        const predictionId = result?.predictionId ?? (result as any)?.id ?? null;
         if (predictionId) {
           navigate(`/prediction/${predictionId}`);
         } else {
-          // Fallback: navigate to result without ID (server returned no ID)
           setErrorMessage('Prediction completed but no prediction ID was returned. Check backend logs.');
           setPhase('error');
         }
       }, 800);
     } catch (err: any) {
       if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+      console.error('[RunPrediction] Prediction request failed:', {
+        error: err,
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message
+      });
       const msg =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
@@ -194,11 +273,11 @@ export const RunPrediction: React.FC = () => {
               </h1>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                Full ML Pipeline
+                Live GitHub Pipeline
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1.5 max-w-2xl leading-relaxed">
-              Select a connected repository to run the full RandomForest / XGBoost prediction pipeline with SHAP explainability.
+              Select an authenticated GitHub repository to execute feature extraction, preprocessing, XGBoost prediction, and SHAP explainability.
             </p>
           </div>
         </div>
@@ -209,23 +288,61 @@ export const RunPrediction: React.FC = () => {
         <div className="lg:col-span-3">
           <div className="glass-strong rounded-2xl border border-white/[0.08] overflow-hidden">
             {/* Section header */}
-            <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <Database size={14} className="text-cyan-400" />
+                <FaGithub size={15} className="text-cyan-400" />
                 <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                  Select Repository
+                  GitHub Repositories
                 </span>
-                {allRepos.length > 0 && (
-                  <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
-                    {allRepos.length} connected
-                  </span>
+                <span className="text-[10px] bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono font-bold">
+                  {repoCount} available
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {isConnected ? (
+                  <>
+                    {githubUsername && (
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        Connected as <strong className="text-cyan-400">@{githubUsername}</strong>
+                      </span>
+                    )}
+                    <button
+                      onClick={() => refetchRepos()}
+                      disabled={reposLoading || phase === 'running'}
+                      title="Refresh GitHub Repositories"
+                      className="flex items-center gap-1 text-[10px] px-2.5 py-1 bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <RefreshCw size={11} className={reposLoading ? 'animate-spin' : ''} />
+                      <span>Refresh</span>
+                    </button>
+                    <a
+                      href={connectGitHubUrl}
+                      title="Connect a Different GitHub Account"
+                      className="flex items-center gap-1 text-[10px] px-2.5 py-1 bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <FaGithub size={11} />
+                      <span>Switch GitHub Account</span>
+                    </a>
+                    <button
+                      onClick={() => setIsDisconnectModalOpen(true)}
+                      disabled={disconnectMutation.isPending || phase === 'running'}
+                      title="Disconnect GitHub Account"
+                      className="flex items-center gap-1 text-[10px] px-2.5 py-1 bg-rose-950/40 border border-rose-500/30 text-rose-400 hover:bg-rose-900/50 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <Unplug size={11} />
+                      <span>Disconnect</span>
+                    </button>
+                  </>
+                ) : (
+                  <a
+                    href={connectGitHubUrl}
+                    className="flex items-center gap-1.5 text-[10px] px-3 py-1 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-lg shadow transition-transform hover:scale-[1.02]"
+                  >
+                    <FaGithub size={11} />
+                    <span>Connect GitHub</span>
+                  </a>
                 )}
               </div>
-              {phase === 'select' && selectedRepo && (
-                <span className="text-[10px] text-cyan-400 flex items-center gap-1">
-                  <CheckCircle2 size={11} /> Selected
-                </span>
-              )}
             </div>
 
             {/* Search */}
@@ -236,8 +353,8 @@ export const RunPrediction: React.FC = () => {
                   type="text"
                   value={repoSearch}
                   onChange={(e) => setRepoSearch(e.target.value)}
-                  placeholder="Filter by name or URL…"
-                  disabled={phase === 'running'}
+                  placeholder={isConnected ? "Filter by name, owner, language, or URL…" : "GitHub account not connected"}
+                  disabled={!isConnected || phase === 'running'}
                   className="w-full pl-8 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 disabled:opacity-50 transition-all duration-200"
                 />
               </div>
@@ -245,52 +362,70 @@ export const RunPrediction: React.FC = () => {
 
             {/* Repository list */}
             <div className="overflow-y-auto max-h-[420px] p-3 space-y-2 no-scrollbar">
-              {reposLoading ? (
+              {statusLoading || (isConnected && reposLoading) ? (
                 <div className="flex flex-col items-center justify-center py-14 gap-3">
                   <Loader2 size={24} className="text-cyan-400 animate-spin" />
-                  <span className="text-xs text-slate-400">Fetching your repositories…</span>
+                  <span className="text-xs text-slate-400 font-mono">Loading repositories for the connected GitHub account…</span>
+                </div>
+              ) : !isConnected ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
+                  <FaGithub size={36} className="text-slate-600 mb-1" />
+                  <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">GitHub Account Not Connected</span>
+                  <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+                    You must connect a GitHub account to view repositories and run AI risk predictions.
+                  </p>
+                  <a
+                    href={connectGitHubUrl}
+                    className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs rounded-xl shadow-lg hover:from-cyan-400 hover:to-blue-500 transition-all"
+                  >
+                    <FaGithub size={13} />
+                    <span>Connect GitHub</span>
+                  </a>
                 </div>
               ) : reposError ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-3 text-center">
+                <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
                   <ShieldAlert size={28} className="text-rose-400" />
-                  <span className="text-xs font-bold text-rose-300">Failed to load repositories</span>
-                  <span className="text-[11px] text-slate-500 max-w-xs">
-                    Could not reach the backend. Ensure Spring Boot is running.
-                  </span>
-                  <button
-                    onClick={() => refetchRepos()}
-                    className="mt-1 flex items-center gap-1.5 text-[10px] px-3 py-1.5 bg-rose-950/30 border border-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-950/50 transition-colors"
-                  >
-                    <RefreshCw size={11} /> Retry
-                  </button>
+                  <span className="text-xs font-bold text-rose-300">Unable to fetch GitHub repositories</span>
+                  <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+                    {getErrorMessage(githubError)}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      onClick={() => refetchRepos()}
+                      className="flex items-center gap-1.5 text-[10px] px-3 py-1.5 bg-rose-950/30 border border-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-950/50 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw size={11} /> Retry Loading
+                    </button>
+                    <a
+                      href={connectGitHubUrl}
+                      className="flex items-center gap-1.5 text-[10px] px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-950/50 transition-colors"
+                    >
+                      <FaGithub size={11} /> Reconnect GitHub
+                    </a>
+                  </div>
                 </div>
               ) : allRepos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-2 text-center">
-                  <Database size={32} className="text-slate-600 mb-1" />
-                  <span className="text-xs font-bold text-slate-300">No Repositories Connected</span>
+                <div className="flex flex-col items-center justify-center py-14 gap-2 text-center px-4">
+                  <FaGithub size={32} className="text-slate-600 mb-1" />
+                  <span className="text-xs font-bold text-slate-300">No GitHub Repositories Found</span>
                   <p className="text-[11px] text-slate-500 max-w-xs leading-relaxed">
-                    Connect a GitHub repository from the Repositories page, then return here to run a prediction.
+                    No repositories were returned for your active GitHub account.
                   </p>
-                  <button
-                    onClick={() => navigate('/repositories')}
-                    className="mt-2 flex items-center gap-1.5 text-[10px] px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-950/50 transition-colors"
-                  >
-                    <GitBranch size={11} /> Go to Repositories
-                  </button>
                 </div>
               ) : filteredRepos.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center">
-                  <span className="text-xs font-bold text-slate-300">No matches for "{repoSearch}"</span>
+                  <span className="text-xs font-bold text-slate-300">No matches found</span>
+                  <span className="text-[10px] text-slate-500 mt-1">No repositories match "{repoSearch}"</span>
                 </div>
               ) : (
                 filteredRepos.map((repo) => {
-                  const isSelected = selectedRepo?.id === repo.id;
+                  const isSelected = selectedRepo?.id === repo.id || selectedRepo?.full_name === repo.full_name;
                   return (
                     <button
-                      key={repo.id}
+                      key={repo.id || repo.full_name}
                       disabled={phase === 'running'}
                       onClick={() => setSelectedRepo(repo)}
-                      className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed
+                      className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer
                         ${isSelected
                           ? 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_16px_rgba(34,211,238,0.12)]'
                           : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.10]'
@@ -303,33 +438,55 @@ export const RunPrediction: React.FC = () => {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-xs font-bold truncate transition-colors duration-200 ${isSelected ? 'text-cyan-300' : 'text-slate-200 group-hover:text-white'}`}>
-                            {repo.repositoryName}
+                            {repo.name}
                           </span>
-                          {repo.organization && (
-                            <span className="text-[8px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
-                              {repo.organization}
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            {repo.full_name}
+                          </span>
+                          {repo.private ? (
+                            <span className="inline-flex items-center gap-1 text-[8px] bg-rose-950/40 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                              <Lock size={8} /> Private
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[8px] bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                              <Globe size={8} /> Public
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 text-[10px] text-slate-500 truncate">
-                          <ExternalLink size={9} />
-                          <span className="truncate">{repo.repositoryUrl}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-0.5">
-                          <Calendar size={9} />
-                          <span>Last scan: {formatDate(repo.lastSyncDate)}</span>
+
+                        {repo.description && (
+                          <p className="text-[10px] text-slate-400 line-clamp-1 mb-1 font-sans">
+                            {repo.description}
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
+                          {repo.language && (
+                            <div className="flex items-center gap-1 text-cyan-400">
+                              <Code2 size={9} />
+                              <span>{repo.language}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <Calendar size={9} />
+                            <span>Updated {formatDate(repo.updated_at)}</span>
+                          </div>
                         </div>
                       </div>
 
                       <div className="shrink-0 text-right">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-bold uppercase font-mono ${getRiskBadgeClass(repo.riskLevel)}`}>
-                          {repo.riskLevel}
-                        </span>
-                        <div className="text-[9px] text-slate-500 mt-1 font-mono">
-                          {(repo.failureProbability * 100).toFixed(1)}% FP
-                        </div>
+                        <a
+                          href={repo.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-cyan-400 p-1 transition-colors"
+                          title="View on GitHub"
+                        >
+                          <ExternalLink size={12} />
+                        </a>
                       </div>
                     </button>
                   );
@@ -338,19 +495,21 @@ export const RunPrediction: React.FC = () => {
             </div>
 
             {/* Run button */}
-            <div className="px-5 py-4 border-t border-white/[0.06] flex items-center justify-between gap-4 bg-slate-900/20">
-              <div className="text-[10px] text-slate-500 font-mono">
-                {selectedRepo
-                  ? `Selected: ${selectedRepo.repositoryName}`
+            <div className="px-4 sm:px-5 py-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/20">
+              <div className="text-[10px] text-slate-400 font-mono truncate max-w-full sm:max-w-[260px]">
+                {!isConnected
+                  ? 'GitHub account not connected'
+                  : selectedRepo
+                  ? `Selected: ${selectedRepo.full_name}`
                   : 'No repository selected'}
               </div>
               <button
                 id="run-prediction-btn"
                 onClick={handleRunPrediction}
-                disabled={!selectedRepo || phase === 'running'}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold uppercase tracking-wider
+                disabled={!isConnected || !selectedRepo || phase === 'running'}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold uppercase tracking-wider
                   hover:from-cyan-400 hover:to-blue-500 transition-all duration-200 shadow-lg shadow-cyan-500/25
-                  disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                  disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer"
               >
                 {phase === 'running' ? (
                   <><Loader2 size={13} className="animate-spin" /> Running…</>
@@ -458,7 +617,7 @@ export const RunPrediction: React.FC = () => {
               <div className="px-5 pb-5">
                 <div className="p-3 bg-slate-900/40 border border-white/[0.04] rounded-xl">
                   <p className="text-[10px] text-slate-500 leading-relaxed">
-                    Select a repository on the left and click <strong className="text-slate-400">Run Prediction</strong> to start the full ML pipeline. Results will be stored and displayed on the Prediction Result page.
+                    Select a GitHub repository on the left and click <strong className="text-slate-400">Run Prediction</strong> to start the full ML pipeline. Results will be stored and displayed on the Prediction Result page.
                   </p>
                 </div>
               </div>
@@ -466,6 +625,14 @@ export const RunPrediction: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Disconnect Confirmation Modal */}
+      <GitHubDisconnectModal
+        isOpen={isDisconnectModalOpen}
+        onClose={() => setIsDisconnectModalOpen(false)}
+        onConfirm={handleConfirmDisconnect}
+        isPending={disconnectMutation.isPending}
+      />
     </DashboardLayout>
   );
 };

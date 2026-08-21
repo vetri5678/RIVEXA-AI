@@ -57,17 +57,17 @@ export const FloatingAIAssistantWidget: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 font-mono">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 font-mono max-w-[calc(100vw-2rem)]">
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="h-12 w-12 rounded-full bg-neon-blue text-cyber-950 flex items-center justify-center shadow-neon-blue hover:scale-105 active:scale-95 transition-all duration-300 animate-float"
+          className="h-12 w-12 rounded-full bg-neon-blue text-cyber-950 flex items-center justify-center shadow-neon-blue hover:scale-105 active:scale-95 transition-all duration-300 animate-float cursor-pointer ml-auto"
           title="Open AI Copilot"
         >
           <MessageSquare size={20} />
         </button>
       ) : (
-        <GlassCard className="w-80 h-[28rem] flex flex-col justify-between border-neon-blue/30 shadow-neon-blue/15 animate-count-up p-4 bg-cyber-900/95 backdrop-blur-md">
+        <GlassCard className="w-[calc(100vw-2rem)] sm:w-80 h-[26rem] sm:h-[28rem] flex flex-col justify-between border-neon-blue/30 shadow-neon-blue/15 animate-count-up p-4 bg-cyber-900/95 backdrop-blur-md">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
             <div className="flex items-center gap-1.5 text-neon-blue">
@@ -127,7 +127,8 @@ export const FloatingAIAssistantWidget: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder={isLoading ? 'Generating response...' : 'Ask Copilot...'}
-              className="flex-1 glass-input py-1.5 text-xs border border-slate-700 focus:border-neon-blue rounded px-2 bg-cyber-950/50 text-slate-100 disabled:opacity-50"
+              className="flex-1 py-1.5 text-xs border border-slate-300 focus:border-neon-blue rounded px-2 bg-white text-black placeholder-[#6B7280] disabled:bg-slate-200 disabled:text-slate-500 focus:outline-none focus:ring-1 focus:ring-neon-blue font-sans"
+              style={{ color: '#000000', backgroundColor: '#FFFFFF' }}
             />
             <button
               onClick={handleSend}

@@ -38,11 +38,54 @@ def get_health():
 @router.get("/version", summary="ML Model Version Details")
 def get_version():
     return {
-        "modelVersion": model_loader.metadata.get("model_version", "1.0.0"),
-        "modelName": model_loader.metadata.get("model_name", "Random Forest"),
+        "modelVersion": model_loader.metadata.get("model_version", "xgboost-v1.0"),
+        "modelName": model_loader.metadata.get("model_name", "XGBoost"),
         "status": model_loader.metadata.get("status", "Development Model (Synthetic Dataset)"),
         "trainedAt": model_loader.metadata.get("trained_at", "N/A"),
         "datasetRecords": model_loader.metadata.get("dataset_records", 20000)
+    }
+
+
+@router.get("/model/telemetry", summary="Get Model Telemetry and Evaluation Metrics")
+@router.get("/telemetry", summary="Get Model Telemetry and Evaluation Metrics")
+def get_telemetry():
+    if not model_loader.is_loaded:
+        raise HTTPException(status_code=503, detail="Model telemetry unavailable")
+
+    meta = model_loader.metadata or {}
+    metrics = meta.get("metrics", {})
+    raw_feature_importances = meta.get("feature_importance", {})
+
+    total_imp = sum(raw_feature_importances.values()) if raw_feature_importances else 0.0
+    top_features = []
+    sorted_features = sorted(raw_feature_importances.items(), key=lambda x: x[1], reverse=True)
+
+    for name, imp in sorted_features:
+        pct = (imp / total_imp * 100.0) if total_imp > 0 else 0.0
+        top_features.append({
+            "name": name,
+            "importance": round(float(imp), 6),
+            "percentage": round(float(pct), 2),
+            "importanceType": "gain"
+        })
+
+    return {
+        "model": {
+            "name": meta.get("model_name", "XGBoost"),
+            "framework": meta.get("framework", "xgboost"),
+            "version": meta.get("model_version") or meta.get("version", "xgboost-v1.0"),
+            "status": meta.get("status", "ACTIVE"),
+            "lastTrainedAt": meta.get("trained_at", "N/A")
+        },
+        "metrics": {
+            "accuracy": metrics.get("accuracy", 0.0),
+            "precision": metrics.get("precision", 0.0),
+            "recall": metrics.get("recall", 0.0),
+            "f1": metrics.get("f1_score", 0.0),
+            "rocAuc": metrics.get("roc_auc", 0.0),
+            "logLoss": metrics.get("log_loss", 0.0)
+        },
+        "topFeatures": top_features
     }
 
 

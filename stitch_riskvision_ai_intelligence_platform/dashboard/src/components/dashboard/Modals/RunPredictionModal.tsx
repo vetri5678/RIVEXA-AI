@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Search, Database, ExternalLink, Calendar, ShieldAlert, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
+﻿import React, { useState, useRef, useEffect } from 'react';
+import { X, Search, ExternalLink, Calendar, ShieldAlert, Zap, AlertCircle, CheckCircle2, Lock, Globe, Code2 } from 'lucide-react';
 import { FaGithub } from 'react-icons/fa';
-import { useRepositories } from '../../../hooks/useRepository';
-import type { RepositorySummary } from '../../../types/repository';
+import { useGithubUserRepositories } from '../../../hooks/useRepository';
+import type { GithubRepository } from '../../../types/repository';
 
 type Tab = 'select' | 'url';
 
@@ -22,24 +22,33 @@ function isValidGitHubUrl(url: string): boolean {
   return GITHUB_URL_REGEX.test(url.trim());
 }
 
-const getRiskBadgeColor = (level: string) => {
-  switch (level) {
-    case 'CRITICAL': return 'bg-rose-500/20 text-rose-400 border border-rose-500/30';
-    case 'HIGH':     return 'bg-orange-500/20 text-orange-400 border border-orange-500/30';
-    case 'MEDIUM':   return 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
-    default:         return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return 'Recently updated';
+  try {
+    return new Date(dateStr).toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  } catch {
+    return 'Recently updated';
   }
 };
 
-const formatLastScan = (dateStr: string | null) => {
-  if (!dateStr) return 'Never scanned';
-  try {
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-  } catch {
-    return 'Never scanned';
+const getErrorMessage = (error: unknown): string => {
+  if (!error) return 'Unable to fetch GitHub repositories.';
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const res = (error as any).response;
+    const data = res?.data;
+    if (data?.error?.message) return data.error.message;
+    if (data?.message && data.message !== 'Internal Server Error' && data.message !== 'An unexpected error occurred') return data.message;
+    if (typeof data?.error === 'string' && data.error !== 'Internal Server Error' && data.error !== 'An unexpected error occurred') return data.error;
+    if (data?.detail && data.detail !== 'Internal Server Error') return data.detail;
+    if (res?.status === 401) return 'GitHub account is connected, but repository authorization is missing or expired. Please click Reconnect GitHub below.';
+    if (res?.status === 403) return 'GitHub repository access denied. Please reconnect GitHub with repository access.';
+    if (res?.status === 429) return 'GitHub API rate limit reached. Please try again later.';
+    if (res?.status === 500) return 'GitHub repository service encountered an error. Please click Reconnect GitHub to re-authorize.';
   }
+  if (error instanceof Error && error.message !== 'Internal Server Error') return error.message;
+  return 'GitHub repository authorization is missing or expired. Please click Reconnect GitHub below.';
 };
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -47,7 +56,7 @@ const formatLastScan = (dateStr: string | null) => {
 export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
   isOpen,
   onClose,
-  onSelect,
+  onSelect: _onSelect,
   onGithubUrl,
   isSubmitting,
 }) => {
@@ -57,8 +66,8 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
   const [urlTouched, setUrlTouched] = useState(false);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch all repositories (up to 100)
-  const { data: repoData, isLoading, isError, refetch } = useRepositories({ size: 100 });
+  // Fetch live GitHub user repositories
+  const { data: githubData, isLoading, isError, error, refetch } = useGithubUserRepositories();
 
   // Auto-focus URL input when switching to URL tab
   useEffect(() => {
@@ -69,12 +78,24 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
 
   if (!isOpen) return null;
 
-  const repositories: RepositorySummary[] = repoData?.content || [];
-  const filteredRepos = repositories.filter(
-    (repo) =>
-      repo.repositoryName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (repo.repositoryUrl && repo.repositoryUrl.toLowerCase().includes(searchTerm.toLowerCase())),
-  );
+  const repositories: GithubRepository[] = githubData?.repositories || [];
+  const modalSearch = searchTerm.toLowerCase().trim();
+  const filteredRepos = repositories.filter((repo) => {
+    const name = repo.name ?? '';
+    const fullName = repo.full_name ?? '';
+    const owner = repo.owner ?? '';
+    const desc = repo.description ?? '';
+    const lang = repo.language ?? '';
+    const url = repo.html_url ?? '';
+    return (
+      name.toLowerCase().includes(modalSearch) ||
+      fullName.toLowerCase().includes(modalSearch) ||
+      owner.toLowerCase().includes(modalSearch) ||
+      desc.toLowerCase().includes(modalSearch) ||
+      lang.toLowerCase().includes(modalSearch) ||
+      url.toLowerCase().includes(modalSearch)
+    );
+  });
 
   const urlIsValid = githubUrl.trim().length > 0 && isValidGitHubUrl(githubUrl);
   const urlHasError = urlTouched && githubUrl.trim().length > 0 && !urlIsValid;
@@ -105,7 +126,7 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
                 Run AI Prediction
               </h2>
               <p className="text-[10px] text-slate-400 mt-0.5 tracking-normal">
-                Analyze failure probability using the ML pipeline
+                Analyze failure probability using the live GitHub ML pipeline
               </p>
             </div>
           </div>
@@ -127,8 +148,8 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
                 : 'text-slate-500 hover:text-slate-300 border-b-2 border-transparent'
               }`}
           >
-            <Database size={12} />
-            Select Repository
+            <FaGithub size={12} />
+            GitHub Repositories ({repositories.length})
           </button>
           <button
             onClick={() => setActiveTab('url')}
@@ -138,7 +159,7 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
                 : 'text-slate-500 hover:text-slate-300 border-b-2 border-transparent'
               }`}
           >
-            <FaGithub size={12} />
+            <ExternalLink size={12} />
             GitHub URL
           </button>
         </div>
@@ -156,7 +177,7 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Filter by repository name or GitHub URL..."
+                  placeholder="Filter by repository name, owner, language, or URL..."
                   className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all duration-200"
                 />
               </div>
@@ -167,25 +188,36 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 space-y-2">
                   <span className="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
-                  <span className="text-[10px]">Retrieving repository list...</span>
+                  <span className="text-[10px]">Retrieving repository list from GitHub...</span>
                 </div>
               ) : isError ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center text-rose-400 space-y-3">
                   <ShieldAlert size={28} className="text-rose-500 animate-bounce" />
-                  <span className="text-[11px] font-bold">Failed to load repositories</span>
-                  <button
-                    onClick={() => refetch()}
-                    className="text-[10px] px-3 py-1.5 bg-rose-950/30 border border-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-950/50"
-                  >
-                    Retry Loading
-                  </button>
+                  <span className="text-[11px] font-bold">Failed to load GitHub repositories</span>
+                  <p className="text-[10px] text-slate-400 max-w-[280px]">
+                    {getErrorMessage(error)}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => refetch()}
+                      className="text-[10px] px-3 py-1.5 bg-rose-950/30 border border-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-950/50 transition-colors"
+                    >
+                      Retry Loading
+                    </button>
+                    <a
+                      href="/oauth2/authorization/github"
+                      className="text-[10px] px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-950/50 transition-colors inline-flex items-center gap-1"
+                    >
+                      <FaGithub size={10} /> Reconnect GitHub
+                    </a>
+                  </div>
                 </div>
               ) : repositories.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 space-y-2">
-                  <Database size={32} className="text-slate-500 mb-1" />
+                  <FaGithub size={32} className="text-slate-500 mb-1" />
                   <span className="text-xs font-bold text-slate-300">No Repositories Found</span>
                   <p className="text-[10px] text-slate-500 max-w-[280px]">
-                    No repositories found. Please connect GitHub or create a repository first.
+                    No repositories found for your connected GitHub account. Please connect GitHub or paste a URL below.
                   </p>
                   <button
                     onClick={() => setActiveTab('url')}
@@ -205,37 +237,48 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
               ) : (
                 filteredRepos.map((repo) => (
                   <button
-                    key={repo.id}
+                    key={repo.id || repo.full_name}
                     disabled={isSubmitting}
-                    onClick={() => onSelect(repo.id)}
+                    onClick={() => onGithubUrl(repo.html_url)}
                     className="w-full text-left p-3.5 border border-slate-900 bg-slate-950/60 hover:bg-slate-900/50 hover:border-slate-800 rounded-xl transition-all duration-300 flex items-center justify-between group disabled:opacity-50"
                   >
                     <div className="space-y-1.5 pr-4 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors duration-200">
-                          {repo.repositoryName}
+                          {repo.name}
                         </span>
-                        {repo.organization && (
-                          <span className="text-[8px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                            {repo.organization}
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          {repo.full_name}
+                        </span>
+                        {repo.private ? (
+                          <span className="inline-flex items-center gap-1 text-[8px] bg-rose-950/40 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                            <Lock size={8} /> Private
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[8px] bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                            <Globe size={8} /> Public
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
-                        <ExternalLink size={10} />
-                        <span className="truncate max-w-[280px]">{repo.repositoryUrl}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
-                        <Calendar size={10} />
-                        <span>Last Scan: {formatLastScan(repo.lastSyncDate)}</span>
+                      {repo.description && (
+                        <p className="text-[10px] text-slate-400 line-clamp-1">
+                          {repo.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3 text-[9px] text-slate-500 flex-wrap">
+                        {repo.language && (
+                          <span className="flex items-center gap-1 text-cyan-400">
+                            <Code2 size={9} /> {repo.language}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Calendar size={9} /> Updated {formatDate(repo.updated_at)}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono uppercase ${getRiskBadgeColor(repo.riskLevel)}`}>
-                        {repo.riskLevel}
-                      </span>
-                      <span className="text-[9px] font-bold text-slate-400">
-                        {(repo.failureProbability * 100).toFixed(1)}% FP
+                    <div className="text-right shrink-0">
+                      <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-cyan-950/50 text-cyan-400 border border-cyan-500/30 group-hover:bg-cyan-500 group-hover:text-black transition-all">
+                        Select
                       </span>
                     </div>
                   </button>
@@ -245,30 +288,28 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
 
             {/* Footer */}
             <div className="p-4 border-t border-slate-900 bg-slate-950/50 text-[9px] text-slate-500 text-center flex items-center justify-between">
-              <span>Connected Repos: {repositories.length}</span>
-              <span>UUID auto-selected on click</span>
+              <span>Connected Repositories: {repositories.length}</span>
+              <span>Click any repository to run prediction</span>
             </div>
           </>
         )}
 
-        {/* ── Tab: GitHub URL ───────────────────────────────────────────────── */}
+        {/* ── Tab: GitHub URL ────────────────────────────────────────────── */}
         {activeTab === 'url' && (
           <div className="flex flex-col flex-1">
             <div className="p-6 flex-1 space-y-5">
-
-              {/* Instruction */}
               <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-4 space-y-1.5">
                 <div className="flex items-center gap-2 text-cyan-400">
                   <FaGithub size={14} />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">GitHub-Native Analysis</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider">
+                    GitHub-Native Analysis
+                  </span>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Paste any public GitHub repository URL. RiskVision will fetch live metadata,
-                  register the repository, and run the full ML prediction pipeline automatically.
+                  Paste any public GitHub repository URL. RIVEXA will fetch live metadata, register the repository, and run the full ML prediction pipeline automatically.
                 </p>
               </div>
 
-              {/* URL Input */}
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   GitHub Repository URL
@@ -282,89 +323,69 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
                     id="github-url-input"
                     type="url"
                     value={githubUrl}
-                    onChange={(e) => { setGithubUrl(e.target.value); setUrlTouched(true); }}
+                    onChange={(e) => {
+                      setGithubUrl(e.target.value);
+                      setUrlTouched(true);
+                    }}
                     onBlur={() => setUrlTouched(true)}
                     onKeyDown={handleUrlKeyDown}
                     placeholder="https://github.com/owner/repository"
                     disabled={isSubmitting}
-                    className={`w-full pl-10 pr-10 py-3 bg-slate-900 border rounded-xl text-xs text-slate-100 placeholder-slate-600
-                      focus:outline-none focus:ring-1 transition-all duration-200 disabled:opacity-50
-                      ${urlHasError
-                        ? 'border-rose-500/50 focus:border-rose-500/70 focus:ring-rose-500/20'
+                    className={`w-full pl-10 pr-10 py-3 bg-slate-900 border rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none transition-all duration-200 disabled:opacity-50 ${
+                      urlHasError
+                        ? 'border-rose-500/70 focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20'
                         : urlIsValid
-                          ? 'border-emerald-500/40 focus:border-emerald-500/60 focus:ring-emerald-500/20'
-                          : 'border-slate-700 focus:border-cyan-500/60 focus:ring-cyan-500/20'
-                      }`}
+                        ? 'border-emerald-500/60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20'
+                        : 'border-slate-800 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20'
+                    }`}
                   />
-                  {/* Validation icon */}
-                  {githubUrl.trim().length > 0 && (
-                    <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
-                      {urlIsValid
-                        ? <CheckCircle2 size={14} className="text-emerald-400" />
-                        : <AlertCircle size={14} className="text-rose-400" />
-                      }
+                  {urlIsValid && (
+                    <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-emerald-400 pointer-events-none">
+                      <CheckCircle2 size={15} />
+                    </span>
+                  )}
+                  {urlHasError && (
+                    <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-rose-400 pointer-events-none">
+                      <AlertCircle size={15} />
                     </span>
                   )}
                 </div>
 
-                {/* Validation message */}
                 {urlHasError && (
-                  <p className="text-[10px] text-rose-400 flex items-center gap-1.5">
-                    <AlertCircle size={10} />
-                    Must be a valid GitHub URL, e.g. https://github.com/owner/repo
+                  <p className="text-[10px] text-rose-400 flex items-center gap-1 font-mono">
+                    <AlertCircle size={11} />
+                    Enter a valid URL (e.g. https://github.com/owner/repo)
                   </p>
                 )}
-                {urlIsValid && (
-                  <p className="text-[10px] text-emerald-400 flex items-center gap-1.5">
-                    <CheckCircle2 size={10} />
-                    Valid GitHub repository URL detected
-                  </p>
-                )}
-              </div>
-
-              {/* Examples */}
-              <div className="space-y-1.5">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Examples</span>
-                <div className="grid gap-1.5">
-                  {[
-                    'https://github.com/vetri5678/riskprediction-ai-',
-                    'https://github.com/microsoft/vscode',
-                    'https://github.com/facebook/react',
-                  ].map((ex) => (
-                    <button
-                      key={ex}
-                      onClick={() => { setGithubUrl(ex); setUrlTouched(true); }}
-                      className="text-left text-[9px] text-slate-500 hover:text-cyan-400 font-mono truncate transition-colors duration-200 px-2 py-1 rounded-lg hover:bg-slate-900"
-                    >
-                      {ex}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
-            {/* Action footer */}
+            {/* Footer */}
             <div className="p-4 border-t border-slate-900 bg-slate-950/50 flex items-center justify-between gap-3">
-              <p className="text-[9px] text-slate-500">
-                Live GitHub metadata fetched on first analysis
-              </p>
               <button
-                id="run-github-url-prediction-btn"
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="run-prediction-url-btn"
                 onClick={handleUrlSubmit}
                 disabled={!urlIsValid || isSubmitting}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-[11px] font-bold uppercase tracking-wider
-                  hover:from-cyan-400 hover:to-blue-400 transition-all duration-200 shadow-lg shadow-cyan-500/25
-                  disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
               >
                 {isSubmitting ? (
                   <>
-                    <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Analyzing...
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Initializing...
                   </>
                 ) : (
                   <>
-                    <Zap size={12} />
-                    Analyze Repository
+                    <Zap size={13} />
+                    Run Prediction
                   </>
                 )}
               </button>

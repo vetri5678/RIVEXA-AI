@@ -1,22 +1,82 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PipelineBreadcrumbs from '../../components/common/PipelineBreadcrumbs';
 import WidgetWrapper from '../../components/dashboard/Common/WidgetWrapper';
 import PredictionPipelineWidget from '../../components/dashboard/PredictionPipeline/PredictionPipelineWidget';
-import { usePipelineRepositorySync } from '../../hooks/useDashboard';
-import { Database, RefreshCw, GitBranch, GitCommit, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { usePipelineRepositorySync, useOverview } from '../../hooks/useDashboard';
+import { useGithubConnectionStatus } from '../../hooks/useRepository';
+import { Database, RefreshCw, GitBranch, GitCommit, CheckCircle2, ShieldCheck, ArrowRight, CheckCircle } from 'lucide-react';
+import authApi from '../../api/auth';
+import { queryClient } from '../../App';
 
 export const RepositorySync: React.FC = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const { data: syncData, isLoading, isError, refetch } = usePipelineRepositorySync();
+  const { data: overview } = useOverview();
+  const { data: ghStatus } = useGithubConnectionStatus();
+  const totalRepos = syncData?.connected_repositories ?? overview?.total_projects ?? ghStatus?.repositoryCount ?? 0;
   const [manualSyncing, setManualSyncing] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+
+  // Auto-redirect effect when sync completes successfully
+  useEffect(() => {
+    if (!isLoading && syncData && !isError && !redirecting) {
+      const executeSequence = async () => {
+        try {
+          // 1. Validate success response
+          console.log('[Sync] Sync completed. Validating response & refreshing state...');
+
+          // 2. Refresh authenticated user data
+          const freshUser = await authApi.getMe();
+          if (freshUser) {
+            localStorage.setItem('rv_user', JSON.stringify(freshUser));
+          }
+
+          // 3 & 4. Refresh repository data and GitHub connection status
+          if (queryClient && queryClient.invalidateQueries) {
+            await queryClient.invalidateQueries({ queryKey: ['github-connection-status'] });
+            await queryClient.invalidateQueries({ queryKey: ['github-repositories'] });
+            await queryClient.invalidateQueries({ queryKey: ['repositories'] });
+            await queryClient.invalidateQueries({ queryKey: ['overview'] });
+          }
+
+          // 5. Mark redirect state and navigate to Dashboard
+          setRedirecting(true);
+          const t = setTimeout(() => {
+            navigate('/dashboard');
+          }, 1200);
+          return () => clearTimeout(t);
+        } catch (err) {
+          console.warn('[Sync] Sequential refresh warning:', err);
+          navigate('/dashboard');
+        }
+      };
+
+      executeSequence();
+    }
+  }, [isLoading, syncData, isError]);
 
   const handleTriggerSync = async () => {
     setManualSyncing(true);
-    setTimeout(() => {
+    try {
+      await refetch();
+      const freshUser = await authApi.getMe();
+      if (freshUser) localStorage.setItem('rv_user', JSON.stringify(freshUser));
+      queryClient.invalidateQueries({ queryKey: ['github-connection-status'] });
+      queryClient.invalidateQueries({ queryKey: ['github-repositories'] });
+      queryClient.invalidateQueries({ queryKey: ['repositories'] });
+      queryClient.invalidateQueries({ queryKey: ['overview'] });
+    } catch (e) {
+      console.warn('[Sync] Manual sync error:', e);
+    } finally {
       setManualSyncing(false);
-      refetch();
-    }, 1500);
+      setRedirecting(true);
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
+    }
   };
 
   return (
@@ -26,6 +86,28 @@ export const RepositorySync: React.FC = () => {
       onQuickAction={() => {}}
     >
       <PipelineBreadcrumbs currentStage="Repository Sync" />
+
+      {/* Sync Completion Redirect Notification Banner */}
+      {redirecting && (
+        <div className="mb-6 p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center justify-between shadow-lg font-sans">
+          <div className="flex items-center gap-3">
+            <CheckCircle size={22} className="text-emerald-400 shrink-0 animate-bounce" />
+            <div>
+              <h3 className="text-sm font-bold">GitHub Synchronization Complete</h3>
+              <p className="text-xs text-emerald-200/80">
+                Authenticated user profile and repository telemetry updated. Auto-redirecting to Main Dashboard…
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl hover:bg-emerald-400 transition-all cursor-pointer whitespace-nowrap"
+          >
+            <span>Go to Dashboard</span>
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Header Banner */}
       <div className="glass-strong rounded-2xl p-6 mb-8 border border-white/[0.08] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
@@ -48,14 +130,23 @@ export const RepositorySync: React.FC = () => {
           </div>
         </div>
 
-        <button
-          disabled={manualSyncing}
-          onClick={handleTriggerSync}
-          className="btn-primary py-2.5 px-4 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 cursor-pointer shrink-0"
-        >
-          <RefreshCw size={14} className={manualSyncing ? 'animate-spin' : ''} />
-          <span>{manualSyncing ? 'Syncing VCS Repos…' : 'Trigger Manual Sync'}</span>
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            disabled={manualSyncing || redirecting}
+            onClick={handleTriggerSync}
+            className="btn-primary py-2.5 px-4 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          >
+            <RefreshCw size={14} className={manualSyncing ? 'animate-spin' : ''} />
+            <span>{manualSyncing ? 'Syncing VCS Repos…' : 'Trigger Manual Sync'}</span>
+          </button>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="btn-secondary py-2.5 px-4 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          >
+            <span>Main Dashboard</span>
+            <ArrowRight size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Embedded Pipeline Navigation Card */}
@@ -79,7 +170,7 @@ export const RepositorySync: React.FC = () => {
                 <span className="text-slate-400 flex items-center gap-2">
                   <Database size={14} className="text-cyan-400" /> Connected Repos
                 </span>
-                <span className="text-white font-bold text-sm">{syncData?.connected_repositories ?? 12}</span>
+                <span className="text-white font-bold text-sm">{totalRepos}</span>
               </div>
 
               <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl flex justify-between items-center">
@@ -100,7 +191,7 @@ export const RepositorySync: React.FC = () => {
                 <span className="text-slate-400 flex items-center gap-2">
                   <ShieldCheck size={14} className="text-blue-400" /> Health Score
                 </span>
-                <span className="text-blue-300 font-bold text-sm">{syncData?.overall_health_score ?? 94.2}%</span>
+                <span className="text-blue-300 font-bold text-sm">{syncData?.overall_health_score != null ? `${syncData.overall_health_score}%` : '—'}</span>
               </div>
             </div>
           </WidgetWrapper>

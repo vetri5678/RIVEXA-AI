@@ -25,6 +25,8 @@ public interface RepositoryEntityRepository extends JpaRepository<RepositoryEnti
 
     Page<RepositoryEntity> findByStatusNot(String status, Pageable pageable);
 
+    // ─── Global queries (all repos — used only where admin-level view is needed) ─
+
     @Query("""
         SELECT r FROM RepositoryEntity r
         WHERE (:search IS NULL OR :search = '' OR
@@ -48,6 +50,62 @@ public interface RepositoryEntityRepository extends JpaRepository<RepositoryEnti
             @Param("organization") String organization,
             Pageable pageable
     );
+
+    // ─── Per-user scoped queries (primary queries for all dashboard + listing) ─
+
+    @Query("""
+        SELECT r FROM RepositoryEntity r
+        WHERE r.user.id = :userId
+          AND (:search IS NULL OR :search = '' OR
+               LOWER(r.repositoryName) LIKE LOWER(CONCAT('%', :search, '%')) OR
+               LOWER(r.organization) LIKE LOWER(CONCAT('%', :search, '%')) OR
+               LOWER(r.description) LIKE LOWER(CONCAT('%', :search, '%')))
+          AND (:status IS NULL OR :status = '' OR UPPER(r.status) = UPPER(:status))
+          AND (:riskLevel IS NULL OR :riskLevel = '' OR UPPER(r.riskLevel) = UPPER(:riskLevel))
+          AND (:predictionStatus IS NULL OR :predictionStatus = '' OR UPPER(r.predictionStatus) = UPPER(:predictionStatus))
+          AND (:gitProvider IS NULL OR :gitProvider = '' OR UPPER(r.gitProvider) = UPPER(:gitProvider))
+          AND (:language IS NULL OR :language = '' OR LOWER(r.language) = LOWER(:language))
+          AND (:organization IS NULL OR :organization = '' OR LOWER(r.organization) = LOWER(:organization))
+        """)
+    Page<RepositoryEntity> findAllByUserWithFilters(
+            @Param("userId") UUID userId,
+            @Param("search") String search,
+            @Param("status") String status,
+            @Param("riskLevel") String riskLevel,
+            @Param("predictionStatus") String predictionStatus,
+            @Param("gitProvider") String gitProvider,
+            @Param("language") String language,
+            @Param("organization") String organization,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT r FROM RepositoryEntity r
+        WHERE r.id IN :repoIds
+          AND (:search IS NULL OR :search = '' OR
+               LOWER(r.repositoryName) LIKE LOWER(CONCAT('%', :search, '%')) OR
+               LOWER(r.organization) LIKE LOWER(CONCAT('%', :search, '%')) OR
+               LOWER(r.description) LIKE LOWER(CONCAT('%', :search, '%')))
+          AND (:status IS NULL OR :status = '' OR UPPER(r.status) = UPPER(:status))
+          AND (:riskLevel IS NULL OR :riskLevel = '' OR UPPER(r.riskLevel) = UPPER(:riskLevel))
+          AND (:predictionStatus IS NULL OR :predictionStatus = '' OR UPPER(r.predictionStatus) = UPPER(:predictionStatus))
+          AND (:gitProvider IS NULL OR :gitProvider = '' OR UPPER(r.gitProvider) = UPPER(:gitProvider))
+          AND (:language IS NULL OR :language = '' OR LOWER(r.language) = LOWER(:language))
+          AND (:organization IS NULL OR :organization = '' OR LOWER(r.organization) = LOWER(:organization))
+        """)
+    Page<RepositoryEntity> findAllByIdsWithFilters(
+            @Param("repoIds") List<UUID> repoIds,
+            @Param("search") String search,
+            @Param("status") String status,
+            @Param("riskLevel") String riskLevel,
+            @Param("predictionStatus") String predictionStatus,
+            @Param("gitProvider") String gitProvider,
+            @Param("language") String language,
+            @Param("organization") String organization,
+            Pageable pageable
+    );
+
+    // ─── Global aggregate counts ──────────────────────────────────────────────
 
     @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.status = :status")
     long countByStatus(@Param("status") String status);
@@ -81,4 +139,53 @@ public interface RepositoryEntityRepository extends JpaRepository<RepositoryEnti
     Double avgAiConfidence();
 
     List<RepositoryEntity> findByStatus(String status);
+
+    // ─── Per-user aggregate counts (all dashboard methods MUST use these) ─────
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId")
+    long countByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.riskLevel) = UPPER(:riskLevel) AND UPPER(r.status) != 'ARCHIVED'")
+    long countByUserIdAndRiskLevelIgnoreCase(@Param("userId") UUID userId, @Param("riskLevel") String riskLevel);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.predictionStatus) != 'PENDING'")
+    long countByUserIdWithPredictions(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND (r.healthScore >= 70.0 OR UPPER(r.riskLevel) = 'LOW') AND UPPER(r.status) != 'ARCHIVED'")
+    long countHealthyByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND ((r.healthScore >= 40.0 AND r.healthScore < 70.0) OR UPPER(r.riskLevel) = 'MEDIUM') AND UPPER(r.status) != 'ARCHIVED'")
+    long countUnderObservationByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND (UPPER(r.predictionStatus) = 'DEAD' OR UPPER(r.riskLevel) = 'CRITICAL' OR r.failureProbability >= 0.75) AND UPPER(r.status) != 'ARCHIVED'")
+    long countPredictedDeadByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT AVG(r.healthScore) FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.status) != 'ARCHIVED'")
+    Double avgHealthScoreByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.riskLevel) = UPPER(:riskLevel) AND UPPER(r.status) != 'ARCHIVED'")
+    long countByUserIdAndRiskLevel(@Param("userId") UUID userId, @Param("riskLevel") String riskLevel);
+
+    @Query("SELECT AVG(r.failureProbability) FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.status) != 'ARCHIVED'")
+    Double avgFailureProbabilityByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT AVG(r.aiConfidence) FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.status) != 'ARCHIVED'")
+    Double avgAiConfidenceByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.status) = UPPER(:status)")
+    long countByUserIdAndStatus(@Param("userId") UUID userId, @Param("status") String status);
+
+    @Query("SELECT r FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.status) = 'ACTIVE' ORDER BY r.failureProbability DESC")
+    List<RepositoryEntity> findTop5ByUserIdAndStatusActive(@Param("userId") UUID userId, Pageable pageable);
+
+    Optional<RepositoryEntity> findByUser_IdAndRepositoryUrl(UUID userId, String repositoryUrl);
+
+    Optional<RepositoryEntity> findByUser_IdAndRepositoryName(UUID userId, String repositoryName);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM RepositoryEntity r WHERE r.user.id = :userId AND LOWER(r.gitProvider) = LOWER(:gitProvider)")
+    void deleteByUserIdAndGitProvider(@Param("userId") UUID userId, @Param("gitProvider") String gitProvider);
+
+    @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND LOWER(r.gitProvider) = LOWER(:gitProvider)")
+    long countByUserIdAndGitProvider(@Param("userId") UUID userId, @Param("gitProvider") String gitProvider);
 }

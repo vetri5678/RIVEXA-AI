@@ -65,6 +65,9 @@ public class UserEntity {
     @Column(name = "provider_user_id", length = 255)
     private String providerUserId;
 
+    @Column(name = "github_id", unique = true)
+    private Long githubId;
+
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 

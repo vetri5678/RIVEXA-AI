@@ -29,4 +29,10 @@ public interface RepositoryPredictionEntityRepository extends JpaRepository<Repo
 
     @Query("SELECT COUNT(DISTINCT p.repositoryId) FROM RepositoryPredictionEntity p")
     long countRepositoriesWithPredictions();
+
+    @Query("SELECT COUNT(p) FROM RepositoryPredictionEntity p WHERE p.repositoryId IN (SELECT r.id FROM RepositoryEntity r WHERE r.user.id = :userId) AND p.createdAt >= :startOfDay")
+    long countByUserIdAndCreatedAtAfter(@Param("userId") UUID userId, @Param("startOfDay") java.time.LocalDateTime startOfDay);
+
+    @Query("SELECT COUNT(p) FROM RepositoryPredictionEntity p WHERE p.repositoryId IN (SELECT r.id FROM RepositoryEntity r WHERE r.user.id = :userId)")
+    long countByUserId(@Param("userId") UUID userId);
 }

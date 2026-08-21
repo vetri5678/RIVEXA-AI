@@ -2,46 +2,84 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dashboardApi from '../api/dashboard';
 import repositoryApi from '../api/repository';
 
+// ─── User identity helper ────────────────────────────────────────────────────
+// Reads the authenticated user's ID from localStorage so we can namespace
+// all query keys by user. This prevents cross-user cache leakage.
+const getCurrentUserId = (): string | null => {
+  try {
+    const raw = localStorage.getItem('rv_user') || localStorage.getItem('rivexa_user') || localStorage.getItem('user');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed?.id || parsed?.userId || parsed?.user_id || parsed?.sub || parsed?.email || null;
+    }
+    // Fallback: try JWT sub claim
+    const token = localStorage.getItem('rv_access_token') || localStorage.getItem('access_token') || localStorage.getItem('rivexa_token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload?.sub || payload?.userId || payload?.email || null;
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return null;
+};
+
+// ─── System status (not user-scoped — global infra health) ───────────────────
+
 export const useSystemStatus = () => {
   return useQuery({
     queryKey: ['system-status'],
     queryFn: dashboardApi.getSystemStatus,
-    refetchInterval: 10000, // Sync status every 10s
+    refetchInterval: 10000,
   });
 };
 
+// ─── User-scoped dashboard queries ───────────────────────────────────────────
+// All stat queries are namespaced with the current userId so that data
+// is never shared between different authenticated users' cache entries.
+
 export const useOverview = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['overview'],
+    queryKey: ['overview', userId],
     queryFn: dashboardApi.getOverview,
+    enabled: !!userId,
   });
 };
 
 export const useGraveyardIndex = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['graveyard-index'],
+    queryKey: ['graveyard-index', userId],
     queryFn: dashboardApi.getGraveyardIndex,
+    enabled: !!userId,
   });
 };
 
 export const useOrgHealth = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['org-health'],
+    queryKey: ['org-health', userId],
     queryFn: dashboardApi.getOrgHealth,
+    enabled: !!userId,
   });
 };
 
 export const useRiskDistribution = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['risk-distribution'],
+    queryKey: ['risk-distribution', userId],
     queryFn: dashboardApi.getRiskDistribution,
+    enabled: !!userId,
   });
 };
 
 export const usePredictionSummary = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['prediction-summary'],
+    queryKey: ['prediction-summary', userId],
     queryFn: dashboardApi.getPredictionSummary,
+    enabled: !!userId,
   });
 };
 
@@ -53,16 +91,20 @@ export const useRepositoryRanking = (params: {
   sort_by?: string;
   sort_desc?: boolean;
 }) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['repository-ranking', params],
+    queryKey: ['repository-ranking', userId, params],
     queryFn: () => dashboardApi.getRepositoryRanking(params),
+    enabled: !!userId,
   });
 };
 
 export const useHighRiskProjects = (limit = 10) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['high-risk-projects', limit],
+    queryKey: ['high-risk-projects', userId, limit],
     queryFn: () => dashboardApi.getHighRiskProjects(limit),
+    enabled: !!userId,
   });
 };
 
@@ -70,6 +112,7 @@ export const useFeatureImportance = () => {
   return useQuery({
     queryKey: ['feature-importance'],
     queryFn: dashboardApi.getFeatureImportance,
+    refetchInterval: 30000,
   });
 };
 
@@ -81,17 +124,21 @@ export const usePredictionTimeline = (granularity = 'daily') => {
 };
 
 export const useRecommendations = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['recommendations'],
+    queryKey: ['recommendations', userId],
     queryFn: dashboardApi.getRecommendations,
+    enabled: !!userId,
   });
 };
 
 export const useAlerts = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['alerts'],
+    queryKey: ['alerts', userId],
     queryFn: dashboardApi.getAlerts,
-    refetchInterval: 15000, // Poll alerts every 15s
+    refetchInterval: 15000,
+    enabled: !!userId,
   });
 };
 
@@ -99,48 +146,58 @@ export const useModelInfo = () => {
   return useQuery({
     queryKey: ['model-info'],
     queryFn: dashboardApi.getModelInfo,
+    refetchInterval: 30000,
   });
 };
 
 export const useActivity = (limit = 50) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['activity', limit],
+    queryKey: ['activity', userId, limit],
     queryFn: () => dashboardApi.getActivity(limit),
+    enabled: !!userId,
   });
 };
 
 export const useForecast = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['forecast'],
+    queryKey: ['forecast', userId],
     queryFn: dashboardApi.getForecast,
+    enabled: !!userId,
   });
 };
 
 export const useExecutiveSummary = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['executive-summary'],
+    queryKey: ['executive-summary', userId],
     queryFn: dashboardApi.getExecutiveSummary,
+    enabled: !!userId,
   });
 };
 
 export const useAIInsights = (limit = 10) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['ai-insights', limit],
+    queryKey: ['ai-insights', userId, limit],
     queryFn: () => dashboardApi.getAIInsights(limit),
+    enabled: !!userId,
   });
 };
 
 export const usePredictMutation = () => {
   const queryClient = useQueryClient();
+  const userId = getCurrentUserId();
   return useMutation({
     mutationFn: dashboardApi.predictProject,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['overview'] });
-      queryClient.invalidateQueries({ queryKey: ['graveyard-index'] });
-      queryClient.invalidateQueries({ queryKey: ['org-health'] });
-      queryClient.invalidateQueries({ queryKey: ['repository-ranking'] });
-      queryClient.invalidateQueries({ queryKey: ['high-risk-projects'] });
-      queryClient.invalidateQueries({ queryKey: ['prediction-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['overview', userId] });
+      queryClient.invalidateQueries({ queryKey: ['graveyard-index', userId] });
+      queryClient.invalidateQueries({ queryKey: ['org-health', userId] });
+      queryClient.invalidateQueries({ queryKey: ['repository-ranking', userId] });
+      queryClient.invalidateQueries({ queryKey: ['high-risk-projects', userId] });
+      queryClient.invalidateQueries({ queryKey: ['prediction-summary', userId] });
     },
   });
 };
@@ -152,15 +209,16 @@ export const usePredictMutation = () => {
  */
 export const useRepositoryAssessmentMutation = () => {
   const queryClient = useQueryClient();
+  const userId = getCurrentUserId();
   return useMutation({
     mutationFn: (repositoryId: string) => dashboardApi.runRepositoryAssessment(repositoryId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['overview'] });
-      queryClient.invalidateQueries({ queryKey: ['graveyard-index'] });
-      queryClient.invalidateQueries({ queryKey: ['org-health'] });
-      queryClient.invalidateQueries({ queryKey: ['repository-ranking'] });
-      queryClient.invalidateQueries({ queryKey: ['high-risk-projects'] });
-      queryClient.invalidateQueries({ queryKey: ['prediction-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['overview', userId] });
+      queryClient.invalidateQueries({ queryKey: ['graveyard-index', userId] });
+      queryClient.invalidateQueries({ queryKey: ['org-health', userId] });
+      queryClient.invalidateQueries({ queryKey: ['repository-ranking', userId] });
+      queryClient.invalidateQueries({ queryKey: ['high-risk-projects', userId] });
+      queryClient.invalidateQueries({ queryKey: ['prediction-summary', userId] });
     },
   });
 };
@@ -171,16 +229,17 @@ export const useRepositoryAssessmentMutation = () => {
  */
 export const useGitHubUrlPredictionMutation = () => {
   const queryClient = useQueryClient();
+  const userId = getCurrentUserId();
   return useMutation({
     mutationFn: (githubUrl: string) => repositoryApi.predictByGithubUrl(githubUrl),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['overview'] });
-      queryClient.invalidateQueries({ queryKey: ['graveyard-index'] });
-      queryClient.invalidateQueries({ queryKey: ['org-health'] });
-      queryClient.invalidateQueries({ queryKey: ['repository-ranking'] });
-      queryClient.invalidateQueries({ queryKey: ['repositories'] });
-      queryClient.invalidateQueries({ queryKey: ['high-risk-projects'] });
-      queryClient.invalidateQueries({ queryKey: ['prediction-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['overview', userId] });
+      queryClient.invalidateQueries({ queryKey: ['graveyard-index', userId] });
+      queryClient.invalidateQueries({ queryKey: ['org-health', userId] });
+      queryClient.invalidateQueries({ queryKey: ['repository-ranking', userId] });
+      queryClient.invalidateQueries({ queryKey: ['repositories', userId] });
+      queryClient.invalidateQueries({ queryKey: ['high-risk-projects', userId] });
+      queryClient.invalidateQueries({ queryKey: ['prediction-summary', userId] });
     },
   });
 };
@@ -192,16 +251,18 @@ export const useGitHubUrlPredictionMutation = () => {
  */
 export const useRunPredictionMutation = () => {
   const queryClient = useQueryClient();
+  const userId = getCurrentUserId();
   return useMutation({
     mutationFn: (repositoryId: string) => dashboardApi.runPrediction(repositoryId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['overview'] });
-      queryClient.invalidateQueries({ queryKey: ['graveyard-index'] });
-      queryClient.invalidateQueries({ queryKey: ['org-health'] });
-      queryClient.invalidateQueries({ queryKey: ['repository-ranking'] });
-      queryClient.invalidateQueries({ queryKey: ['repositories'] });
-      queryClient.invalidateQueries({ queryKey: ['high-risk-projects'] });
-      queryClient.invalidateQueries({ queryKey: ['prediction-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['prediction-result'] });
+      queryClient.invalidateQueries({ queryKey: ['overview', userId] });
+      queryClient.invalidateQueries({ queryKey: ['graveyard-index', userId] });
+      queryClient.invalidateQueries({ queryKey: ['org-health', userId] });
+      queryClient.invalidateQueries({ queryKey: ['repository-ranking', userId] });
+      queryClient.invalidateQueries({ queryKey: ['repositories', userId] });
+      queryClient.invalidateQueries({ queryKey: ['high-risk-projects', userId] });
+      queryClient.invalidateQueries({ queryKey: ['prediction-summary', userId] });
     },
   });
 };
@@ -216,7 +277,7 @@ export const usePredictionResult = (predictionId: string | null) => {
     queryKey: ['prediction-result', predictionId],
     queryFn: () => dashboardApi.getPrediction(predictionId!),
     enabled: !!predictionId,
-    staleTime: 5 * 60 * 1000, // 5 minutes — prediction results don't change
+    staleTime: 0, // Always fetch fresh prediction result for selected repository
     retry: 2,
   });
 };
@@ -236,7 +297,7 @@ export const useTelemetryAnalysis = () => {
   return useQuery({
     queryKey: ['telemetry-analysis'],
     queryFn: dashboardApi.getTelemetryAnalysis,
-    refetchInterval: 60000, // Refresh analysis every minute
+    refetchInterval: 60000,
   });
 };
 
@@ -255,19 +316,21 @@ export const useRepositoryRiskAnalysis = (repoId: string | null) => {
   });
 };
 
-export const useAuditLogs = (page = 0, size = 20) => {
+export const useAuditLogs = (page = 0, size = 20, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['audit-logs', page, size],
     queryFn: () => dashboardApi.getAuditLogs(page, size),
     refetchInterval: 5000,
+    enabled: options?.enabled ?? true,
   });
 };
 
-export const useAuditStatistics = () => {
+export const useAuditStatistics = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['audit-statistics'],
     queryFn: dashboardApi.getAuditStatistics,
     refetchInterval: 15000,
+    enabled: options?.enabled ?? true,
   });
 };
 
@@ -299,15 +362,17 @@ export const usePipelineLifecycle = () => {
   return useQuery({
     queryKey: ['pipeline-lifecycle'],
     queryFn: dashboardApi.getPipelineLifecycle,
-    refetchInterval: 3000, // Poll every 3 seconds for continuous stage progress animation
+    refetchInterval: 3000,
   });
 };
 
 export const useProjectLifecycleCounts = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['project-lifecycle-counts'],
+    queryKey: ['project-lifecycle-counts', userId],
     queryFn: dashboardApi.getProjectLifecycleCounts,
     refetchInterval: 10000,
+    enabled: !!userId,
   });
 };
 
@@ -319,10 +384,13 @@ export const useRiskHeatmap = (params: {
   sort_by?: string;
   sort_desc?: boolean;
 } = {}) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: ['risk-heatmap', params],
+    queryKey: ['risk-heatmap', userId, params],
     queryFn: () => dashboardApi.getRiskHeatmapData(params),
-    refetchInterval: 15000,
+    refetchInterval: (query) => (query.state.error ? false : 15000),
+    retry: 1,
+    enabled: !!userId,
   });
 };
 
@@ -371,6 +439,15 @@ export const usePipelineShap = () => {
     queryKey: ['pipeline-shap'],
     queryFn: dashboardApi.getPipelineShap,
     refetchInterval: 15000,
+  });
+};
+
+export const useLoginHistory = (page = 0, size = 20, options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: ['login-history', page, size],
+    queryFn: () => dashboardApi.getLoginHistory(page, size),
+    refetchInterval: 5000,
+    enabled: options?.enabled ?? true,
   });
 };
 

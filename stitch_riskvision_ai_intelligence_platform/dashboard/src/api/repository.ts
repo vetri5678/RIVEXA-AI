@@ -1,4 +1,5 @@
-import { apiClient, mlApiClient } from './client';
+import { apiClient } from './client';
+import { parseBlobErrorMessage } from '../utils/downloadUtils';
 import type {
   PagedRepositoryResponse,
   RepositoryDetail,
@@ -11,6 +12,7 @@ import type {
   GitHubPredictResponse,
   SyncResponse,
   RepositoryFilters,
+  GithubUserReposResponse,
 } from '../types/repository';
 
 const BASE = '/repositories';
@@ -101,6 +103,12 @@ export const repositoryApi = {
     return data;
   },
 
+  // ─── Live GitHub User Repositories ──────────────────────────────────────────
+  getGithubUserRepositories: async (): Promise<GithubUserReposResponse> => {
+    const { data } = await apiClient.get<GithubUserReposResponse>('/github/user-repositories');
+    return data;
+  },
+
   // ─── Metrics ──────────────────────────────────────────────────────────────────
   getMetrics: async (id: string): Promise<RepositoryMetrics> => {
     const { data } = await apiClient.get<RepositoryMetrics>(`${BASE}/${id}/metrics`);
@@ -128,20 +136,32 @@ export const repositoryApi = {
     return data;
   },
 
-  downloadPdf: async (id: string): Promise<Blob> => {
-    const { data } = await mlApiClient.get('/reports/download/pdf', {
-      params: { project_id: id },
-      responseType: 'blob',
-    });
-    return data;
+  downloadPdf: async (id?: string): Promise<Blob> => {
+    try {
+      const params = id ? { prediction_id: id, project_id: id } : undefined;
+      const { data } = await apiClient.get('/reports/download/pdf', {
+        params,
+        responseType: 'blob',
+      });
+      return data;
+    } catch (err: any) {
+      const msg = await parseBlobErrorMessage(err);
+      throw new Error(msg);
+    }
   },
 
-  downloadExcel: async (id: string): Promise<Blob> => {
-    const { data } = await mlApiClient.get('/reports/download/excel', {
-      params: { project_id: id },
-      responseType: 'blob',
-    });
-    return data;
+  downloadExcel: async (id?: string): Promise<Blob> => {
+    try {
+      const params = id ? { prediction_id: id, project_id: id } : undefined;
+      const { data } = await apiClient.get('/reports/download/excel', {
+        params,
+        responseType: 'blob',
+      });
+      return data;
+    } catch (err: any) {
+      const msg = await parseBlobErrorMessage(err);
+      throw new Error(msg);
+    }
   },
 };
 

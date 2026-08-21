@@ -4,10 +4,10 @@
   "description": "RiskVision AI Intelligence Platform development server",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev-runner.js",
-    "dev:frontend": "vite stitch_riskvision_ai_intelligence_platform",
-    "build": "vite build stitch_riskvision_ai_intelligence_platform",
-    "preview": "vite preview stitch_riskvision_ai_intelligence_platform",
+    "dev": "node dev-runner.js",
+    "dev:frontend": "vite stitch_riskvision_ai_intelligence_platform/dashboard",
+    "build": "vite build stitch_riskvision_ai_intelligence_platform/dashboard",
+    "preview": "vite preview stitch_riskvision_ai_intelligence_platform/dashboard",
     "build:dashboard": "npm run build --prefix stitch_riskvision_ai_intelligence_platform/dashboard",
     "backend": ".\\stitch_riskvision_ai_intelligence_platform\\riskvision_ai_backend\\.venv\\Scripts\\python.exe stitch_riskvision_ai_intelligence_platform/riskvision_ai_backend/main.py server",
     "springboot": "mvn spring-boot:run -f stitch_riskvision_ai_intelligence_platform/riskvision_ai_springboot_backend/pom.xml"

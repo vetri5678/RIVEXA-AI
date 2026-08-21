@@ -38,14 +38,21 @@ public class GitHubClient {
      * Builds HTTP Headers with injected Authorization PAT token and GitHub API required headers.
      */
     public HttpHeaders createHeaders() {
+        return createHeaders(null);
+    }
+
+    public HttpHeaders createHeaders(String customToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", GITHUB_ACCEPT_HEADER);
         headers.set("X-GitHub-Api-Version", GITHUB_API_VERSION);
         headers.set("User-Agent", DEFAULT_USER_AGENT);
 
-        String patToken = gitHubProperties.getToken();
-        if (patToken != null && !patToken.trim().isEmpty() && !patToken.startsWith("mock-")) {
-            headers.set("Authorization", "Bearer " + patToken.trim());
+        String tokenToUse = (customToken != null && !customToken.trim().isEmpty() && !customToken.startsWith("mock-"))
+                ? customToken.trim()
+                : gitHubProperties.getToken();
+
+        if (tokenToUse != null && !tokenToUse.trim().isEmpty() && !tokenToUse.startsWith("mock-")) {
+            headers.set("Authorization", "Bearer " + tokenToUse.trim());
         }
         return headers;
     }
@@ -56,9 +63,16 @@ public class GitHubClient {
     public <T> T executeRequest(String endpoint, HttpMethod method, Object requestBody,
                                 ParameterizedTypeReference<T> responseType,
                                 String owner, String repo, String action, String description) {
+        return executeRequest(endpoint, method, requestBody, responseType, owner, repo, action, description, null);
+    }
+
+    public <T> T executeRequest(String endpoint, HttpMethod method, Object requestBody,
+                                ParameterizedTypeReference<T> responseType,
+                                String owner, String repo, String action, String description,
+                                String customToken) {
         String baseUrl = gitHubProperties.getApi().getBaseUrl();
         String fullUrl = endpoint.startsWith("http") ? endpoint : (baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint));
-        HttpHeaders headers = createHeaders();
+        HttpHeaders headers = createHeaders(customToken);
         HttpEntity<Object> entity = new HttpEntity<>(requestBody, headers);
 
         long startTime = System.currentTimeMillis();
@@ -152,7 +166,7 @@ public class GitHubClient {
         health.put("api_base_url", gitHubProperties.getApi().getBaseUrl());
 
         try {
-            Map<String, Object> userProfile = getUserProfile();
+            Map<String, Object> userProfile = getAuthenticatedUserProfile(patToken);
             health.put("authenticated_user", userProfile.get("login"));
             health.put("user_type", userProfile.get("type"));
             health.put("pat_valid", true);
@@ -376,9 +390,53 @@ public class GitHubClient {
 
     @Cacheable(value = "githubUserProfile", key = "'me'", unless = "#result == null")
     public Map<String, Object> getUserProfile() {
+        return getAuthenticatedUserProfile(null);
+    }
+
+    public Map<String, Object> getAuthenticatedUserProfile(String customToken) {
+        if (customToken == null || customToken.trim().isEmpty() || customToken.startsWith("mock-")) {
+            throw new GitHubAuthenticationException("401 Unauthorized: GitHub account is not connected or token is missing.", "/user", "Disconnected");
+        }
         return executeRequest("/user", HttpMethod.GET, null,
                 new ParameterizedTypeReference<Map<String, Object>>() {}, null, null,
-                "GITHUB_USER_PROFILE", "Fetch authenticated GitHub user profile");
+                "GITHUB_USER_PROFILE", "Fetch authenticated GitHub user profile", customToken);
+    }
+
+    public List<Map<String, Object>> getUserRepositories(Integer page, Integer perPage, String visibility, String affiliation, String sort) {
+        return getUserRepositories(null, page, perPage, visibility, affiliation, sort);
+    }
+
+    public List<Map<String, Object>> getUserRepositories(String customToken, Integer page, Integer perPage, String visibility, String affiliation, String sort) {
+        if (customToken == null || customToken.trim().isEmpty() || customToken.startsWith("mock-")) {
+            throw new GitHubAuthenticationException("401 Unauthorized: GitHub account is not connected or token is missing.", "/user/repos", "Disconnected");
+        }
+        int p = (page != null && page > 0) ? page : 1;
+        int pp = (perPage != null && perPage > 0 && perPage <= 100) ? perPage : 100;
+        String vis = (visibility != null && !visibility.trim().isEmpty()) ? visibility.trim() : "all";
+        String aff = (affiliation != null && !affiliation.trim().isEmpty()) ? affiliation.trim() : "owner,collaborator,organization_member";
+        String s = (sort != null && !sort.trim().isEmpty()) ? sort.trim() : "updated";
+
+        String endpoint = "/user/repos?page=" + p + "&per_page=" + pp + "&visibility=" + vis + "&affiliation=" + aff + "&sort=" + s;
+        try {
+            return executeRequest(endpoint, HttpMethod.GET, null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}, null, null,
+                    "GITHUB_USER_REPOS", "Fetch authenticated user GitHub repositories", customToken);
+        } catch (Exception ex) {
+            log.warn("GET /user/repos failed: {}. Trying user profile fallback.", ex.getMessage());
+            try {
+                Map<String, Object> profile = getAuthenticatedUserProfile(customToken);
+                if (profile != null && profile.get("login") != null) {
+                    String username = (String) profile.get("login");
+                    return executeRequest("/users/" + username + "/repos?page=" + p + "&per_page=" + pp + "&sort=" + s,
+                            HttpMethod.GET, null,
+                            new ParameterizedTypeReference<List<Map<String, Object>>>() {}, null, null,
+                            "GITHUB_USER_REPOS_BY_NAME", "Fetch public GitHub repositories for user: " + username, customToken);
+                }
+            } catch (Exception fallbackEx) {
+                log.error("Fallback user repository fetch also failed: {}", fallbackEx.getMessage());
+            }
+            throw ex;
+        }
     }
 
     public Map<String, Object> getUserProfile(String username) {
@@ -412,6 +470,33 @@ public class GitHubClient {
         return executeRequest("/repos/" + owner + "/" + repo + "/activity", HttpMethod.GET, null,
                 new ParameterizedTypeReference<List<Map<String, Object>>>() {}, owner, repo,
                 "GITHUB_REPO_ACTIVITY", "Fetch activity timeline for " + owner + "/" + repo);
+    }
+
+    public void revokeOAuthToken(String userToken) {
+        if (userToken == null || userToken.trim().isEmpty()) {
+            return;
+        }
+        String clientId = gitHubProperties.getClientId();
+        String clientSecret = gitHubProperties.getClientSecret();
+        if (clientId == null || clientId.trim().isEmpty() || clientSecret == null || clientSecret.trim().isEmpty()) {
+            log.debug("GitHub OAuth clientId/clientSecret not configured. Skipping remote token revocation.");
+            return;
+        }
+
+        try {
+            String url = gitHubProperties.getApi().getBaseUrl() + "/applications/" + clientId.trim() + "/token";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBasicAuth(clientId.trim(), clientSecret.trim());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, String> body = Map.of("access_token", userToken.trim());
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
+
+            restTemplate.exchange(url, HttpMethod.DELETE, requestEntity, Void.class);
+            log.info("[GITHUB OAUTH] Successfully revoked GitHub OAuth token remotely");
+        } catch (Exception ex) {
+            log.warn("[GITHUB OAUTH] Remote token revocation attempted but failed: {}", ex.getMessage());
+        }
     }
 
     private String maskToken(String token) {

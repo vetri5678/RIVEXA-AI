@@ -5,7 +5,9 @@ import ai.riskvision.graveyard.dto.auth.TokenResponse;
 import ai.riskvision.graveyard.dto.auth.UserLoginRequest;
 import ai.riskvision.graveyard.dto.auth.UserRegisterRequest;
 import ai.riskvision.graveyard.dto.auth.UserResponse;
+import ai.riskvision.graveyard.dto.auth.LoginHistoryResponse;
 import ai.riskvision.graveyard.entity.*;
+import java.util.Map;
 import ai.riskvision.graveyard.model.UserRole;
 import ai.riskvision.graveyard.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -33,6 +36,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final EmailService emailService;
+    private final LoginNotificationService loginNotificationService;
     private final OAuthAccountRepository oauthAccountRepository;
     private final N8nWebhookService n8nWebhookService;
     private final VerificationTokenRepository verificationTokenRepository;
@@ -110,19 +114,30 @@ public class AuthService {
         }
     }
 
-    private void recordLoginHistory(UserEntity user, String email, boolean success, String failureReason) {
+    private LoginHistoryEntity recordLoginHistory(UserEntity user, String email, String provider, String sessionId, boolean success, String failureReason) {
         try {
+            String ip = getClientIp();
+            String userAgent = getUserAgent();
+            String browser = ai.riskvision.graveyard.util.UserAgentParser.parseBrowser(userAgent);
+            String os = ai.riskvision.graveyard.util.UserAgentParser.parseOS(userAgent);
+
             LoginHistoryEntity history = LoginHistoryEntity.builder()
                     .user(user)
                     .email(email)
-                    .ipAddress(getClientIp())
-                    .userAgent(getUserAgent())
+                    .ipAddress(ip)
+                    .userAgent(userAgent)
+                    .provider(provider)
+                    .browser(browser)
+                    .operatingSystem(os)
+                    .sessionId(sessionId)
                     .success(success)
                     .failureReason(failureReason)
+                    .emailNotified(false)
                     .build();
-            loginHistoryRepository.save(history);
+            return loginHistoryRepository.save(history);
         } catch (Exception e) {
             log.error("Failed to record login history: {}", e.getMessage());
+            return null;
         }
     }
 
@@ -262,17 +277,24 @@ public class AuthService {
         recordAudit(user, "VERIFICATION_RESENT", "New verification link issued.");
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public TokenResponse login(UserLoginRequest request) {
         String identifier = request.getEmail().trim().toLowerCase();
-        UserEntity user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByUsername(identifier))
-                .orElseThrow(() -> new IllegalArgumentException("Invalid email or password."));
+        
+        Optional<UserEntity> userOpt = userRepository.findByEmail(identifier)
+                .or(() -> userRepository.findByUsername(identifier));
+
+        if (userOpt.isEmpty()) {
+            recordLoginHistory(null, identifier, "email", null, false, "USER_NOT_FOUND");
+            throw new IllegalArgumentException("Invalid email or password.");
+        }
+        
+        UserEntity user = userOpt.get();
 
         // Account Lock Check
         if (user.getLockedUntil() != null) {
             if (user.getLockedUntil().isAfter(LocalDateTime.now())) {
-                recordLoginHistory(user, identifier, false, "ACCOUNT_LOCKED");
+                recordLoginHistory(user, identifier, "email", null, false, "ACCOUNT_LOCKED");
                 throw new IllegalArgumentException(
                         "Account is temporarily locked due to multiple failed login attempts. Try again after "
                                 + user.getLockedUntil());
@@ -286,7 +308,7 @@ public class AuthService {
 
         // Email Verification Check
         if (!Boolean.TRUE.equals(user.getIsVerified())) {
-            recordLoginHistory(user, identifier, false, "EMAIL_NOT_VERIFIED");
+            recordLoginHistory(user, identifier, "email", null, false, "EMAIL_NOT_VERIFIED");
             throw new IllegalArgumentException(
                     "Email address not verified. Please check your inbox or click 'Resend Verification'.");
         }
@@ -301,8 +323,20 @@ public class AuthService {
                 user.setLockedUntil(lockTime);
                 userRepository.save(user);
 
-                recordLoginHistory(user, identifier, false, "ACCOUNT_LOCKED_5_FAILURES");
+                recordLoginHistory(user, identifier, "email", null, false, "ACCOUNT_LOCKED_5_FAILURES");
                 recordAudit(user, "ACCOUNT_LOCKED", maxFailedAttempts + " consecutive failed login attempts.");
+
+                try {
+                    emailService.sendFailedLoginAlertEmail(
+                            user.getEmail(),
+                            user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName() : user.getUsername(),
+                            newAttempts,
+                            getClientIp(),
+                            ai.riskvision.graveyard.util.UserAgentParser.parseBrowser(getUserAgent()),
+                            ai.riskvision.graveyard.util.UserAgentParser.parseOS(getUserAgent()));
+                } catch (Exception ex) {
+                    log.error("Failed to send admin lock alert: {}", ex.getMessage());
+                }
 
                 n8nWebhookService.triggerAccountLockedWebhook(
                         user.getEmail(),
@@ -317,7 +351,7 @@ public class AuthService {
             } else {
                 userRepository.save(user);
                 int remaining = maxFailedAttempts - newAttempts;
-                recordLoginHistory(user, identifier, false, "WRONG_PASSWORD");
+                recordLoginHistory(user, identifier, "email", null, false, "WRONG_PASSWORD");
 
                 n8nWebhookService.triggerLoginFailedWebhook(
                         user.getEmail(),
@@ -331,6 +365,27 @@ public class AuthService {
             }
         }
 
+        // Token Generation (Temporary)
+        String accessToken = jwtTokenProvider.generateAccessToken(
+                user.getEmail(),
+                user.getRole(),
+                user.getId().toString(),
+                user.getProvider() != null ? user.getProvider() : "email",
+                user.getUsername());
+        String rawRefreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
+
+        // Session correlation ID computation
+        String sessionCorrelationId = null;
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = md.digest(accessToken.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i++) sb.append(String.format("%02x", hashBytes[i]));
+            sessionCorrelationId = sb.toString();
+        } catch (Exception ex) {
+            log.debug("Could not compute session correlation ID: {}", ex.getMessage());
+        }
+
         // Success Reset Lock Counters
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
@@ -338,8 +393,12 @@ public class AuthService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        recordLoginHistory(user, identifier, true, null);
+        LoginHistoryEntity history = recordLoginHistory(user, identifier, "email", sessionCorrelationId, true, null);
         recordAudit(user, "LOGIN_SUCCESS", "User logged in with email/password.");
+
+        if (history != null && history.getId() != null) {
+            loginNotificationService.sendAdminLoginNotification(history.getId());
+        }
 
         n8nWebhookService.triggerLoginSuccessWebhook(
                 user.getId().toString(),
@@ -350,14 +409,6 @@ public class AuthService {
                 false,
                 getClientIp(),
                 getUserAgent());
-
-        String accessToken = jwtTokenProvider.generateAccessToken(
-                user.getEmail(),
-                user.getRole(),
-                user.getId().toString(),
-                user.getProvider() != null ? user.getProvider() : "email",
-                user.getUsername());
-        String rawRefreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
 
         // Persist Refresh Token
         RefreshTokenEntity refreshTokenEntity = RefreshTokenEntity.builder()
@@ -705,8 +756,31 @@ public class AuthService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        recordLoginHistory(user, email, true, null);
+        String accessToken = jwtTokenProvider.generateAccessToken(
+                user.getEmail(),
+                user.getRole(),
+                user.getId().toString(),
+                provider,
+                user.getUsername());
+        String rawRefreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
+
+        String sessionCorrelationId = null;
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = md.digest(accessToken.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i++) sb.append(String.format("%02x", hashBytes[i]));
+            sessionCorrelationId = sb.toString();
+        } catch (Exception ex) {
+            log.debug("Could not compute session correlation ID: {}", ex.getMessage());
+        }
+
+        LoginHistoryEntity history = recordLoginHistory(user, email, provider, sessionCorrelationId, true, null);
         recordAudit(user, "OAUTH_LOGIN", "Logged in via OAuth provider: " + provider);
+
+        if (history != null && history.getId() != null) {
+            loginNotificationService.sendAdminLoginNotification(history.getId());
+        }
 
         n8nWebhookService.triggerLoginSuccessWebhook(
                 user.getId().toString(),
@@ -717,14 +791,6 @@ public class AuthService {
                 isNewUser,
                 getClientIp(),
                 getUserAgent());
-
-        String accessToken = jwtTokenProvider.generateAccessToken(
-                user.getEmail(),
-                user.getRole(),
-                user.getId().toString(),
-                provider,
-                user.getUsername());
-        String rawRefreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
 
         RefreshTokenEntity refreshTokenEntity = RefreshTokenEntity.builder()
                 .user(user)
@@ -750,7 +816,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
-                .role(user.getRole())
+                .role(user.getRole() != null ? user.getRole().toUpperCase() : "VIEWER")
                 .isActive(user.getIsActive() != null ? user.getIsActive() : true)
                 .avatarUrl(user.getAvatarUrl())
                 .provider(user.getProvider())
@@ -759,5 +825,39 @@ public class AuthService {
                 .createdAt(user.getCreatedAt() != null ? user.getCreatedAt().toString() : null)
                 .connectedAccounts(connected)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getLoginHistory(int page, int size) {
+        var pageResult = loginHistoryRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
+        );
+
+        var list = pageResult.getContent().stream()
+                .map(entity -> LoginHistoryResponse.builder()
+                        .id(entity.getId().toString())
+                        .userId(entity.getUser() != null ? entity.getUser().getId().toString() : null)
+                        .username(entity.getUser() != null ? entity.getUser().getUsername() : null)
+                        .fullName(entity.getUser() != null ? entity.getUser().getFullName() : null)
+                        .email(entity.getEmail())
+                        .ipAddress(entity.getIpAddress())
+                        .userAgent(entity.getUserAgent())
+                        .provider(entity.getProvider())
+                        .browser(entity.getBrowser())
+                        .operatingSystem(entity.getOperatingSystem())
+                        .sessionId(entity.getSessionId())
+                        .success(Boolean.TRUE.equals(entity.getSuccess()))
+                        .failureReason(entity.getFailureReason())
+                        .createdAt(entity.getCreatedAt() != null ? entity.getCreatedAt().toString() : null)
+                        .build())
+                .toList();
+
+        return Map.of(
+                "items", list,
+                "total", pageResult.getTotalElements(),
+                "page", pageResult.getNumber(),
+                "size", pageResult.getSize(),
+                "total_pages", pageResult.getTotalPages()
+        );
     }
 }

@@ -48,11 +48,14 @@ async def lifespan(app: FastAPI):
     _startup_log = logging.getLogger("riskvision.startup")
 
     # ── Database ──────────────────────────────────────────────────────────────
-    _startup_log.info("[Startup] Initialising database tables…")
-    init_db()
-    with get_db_context() as db:
-        AuthService.bootstrap_admin(db)
-    _startup_log.info("[Startup] Database initialised ✓")
+    try:
+        _startup_log.info("[Startup] Initialising database tables…")
+        init_db()
+        with get_db_context() as db:
+            AuthService.bootstrap_admin(db)
+        _startup_log.info("[Startup] Database initialised ✓")
+    except Exception as _e:
+        _startup_log.warning("[Startup] Database initialization skipped/bypassed: %s", _e)
 
     # ── ML Service singleton (legacy loader) ──────────────────────────────────
     try:
@@ -144,6 +147,35 @@ def read_root():
     }
 
 
+@app.get("/health")
+@app.get("/api/v1/health")
+def health_check():
+    """Lightweight process liveness health endpoint."""
+    from ml_service.model_loader import model_loader
+    is_loaded = api_state.best_model is not None or model_loader.is_loaded
+    return {
+        "status": "ok",
+        "service": "FastAPI Prediction Engine",
+        "model": "XGBoost",
+        "modelLoaded": is_loaded
+    }
+
+
+@app.get("/ready")
+@app.get("/api/v1/ready")
+def readiness_check():
+    """ML engine readiness endpoint."""
+    from ml_service.model_loader import model_loader
+    is_loaded = api_state.best_model is not None or model_loader.is_loaded
+    return {
+        "status": "ready" if is_loaded else "not_ready",
+        "service": "FastAPI Prediction Engine",
+        "model": "XGBoost",
+        "modelLoaded": is_loaded,
+        "preprocessingLoaded": is_loaded
+    }
+
+
 # =============================================================================
 # Logging Setup
 # =============================================================================
@@ -151,16 +183,34 @@ def read_root():
 def setup_logging(verbose: bool = False) -> None:
     """Configure structured logging for both CLI and API server."""
     level = logging.DEBUG if verbose else logging.INFO
+    
+    # Don't rewrap sys.stdout in pytest because it breaks capturing.
+    if "pytest" in sys.modules:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            handlers=[
+                logging.StreamHandler(sys.stdout),
+                logging.FileHandler("pipeline.log", encoding="utf-8")
+            ]
+        )
+        return
+
     # Wrap stdout in a UTF-8 TextIOWrapper so Unicode log characters
     # (e.g. ✓ and →) do not raise UnicodeEncodeError on Windows (cp1252).
-    utf8_stdout = io.TextIOWrapper(
-        sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
-    )
+    try:
+        utf8_stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
+        )
+        stream_handler = logging.StreamHandler(utf8_stdout)
+    except AttributeError:
+        stream_handler = logging.StreamHandler(sys.stdout)
+
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.StreamHandler(utf8_stdout),
+            stream_handler,
             logging.FileHandler("pipeline.log", encoding="utf-8")
         ]
     )

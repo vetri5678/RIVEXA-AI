@@ -13,6 +13,7 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
 
     public static final String OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME = "oauth2_auth_request";
     public static final String REDIRECT_URI_PARAM_COOKIE_NAME = "redirect_uri";
+    public static final String INITIATING_USER_COOKIE_NAME = "rivexa_initiating_user";
     private static final int COOKIE_EXPIRE_SECONDS = 180;
 
     @Override
@@ -47,6 +48,37 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
                     COOKIE_EXPIRE_SECONDS
             );
         }
+
+        String initiatingUser = request.getParameter("user_email");
+        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
+            initiatingUser = request.getParameter("userId");
+        }
+        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
+            initiatingUser = request.getParameter("email");
+        }
+        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
+            initiatingUser = request.getParameter("user");
+        }
+
+        // If not found in query params, try reading existing initiating user cookie from current request
+        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
+            initiatingUser = CookieUtils.getCookie(request, INITIATING_USER_COOKIE_NAME)
+                    .map(jakarta.servlet.http.Cookie::getValue).orElse(null);
+        }
+
+        // Try resolving authenticated principal if available
+        if ((initiatingUser == null || initiatingUser.trim().isEmpty()) && request.getUserPrincipal() != null) {
+            initiatingUser = request.getUserPrincipal().getName();
+        }
+
+        if (initiatingUser != null && !initiatingUser.trim().isEmpty()) {
+            CookieUtils.addCookie(
+                    response,
+                    INITIATING_USER_COOKIE_NAME,
+                    initiatingUser.trim(),
+                    COOKIE_EXPIRE_SECONDS
+            );
+        }
     }
 
     @Override
@@ -59,5 +91,6 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     public void removeAuthorizationRequestCookies(HttpServletRequest request, HttpServletResponse response) {
         CookieUtils.deleteCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME);
         CookieUtils.deleteCookie(request, response, REDIRECT_URI_PARAM_COOKIE_NAME);
+        CookieUtils.deleteCookie(request, response, INITIATING_USER_COOKIE_NAME);
     }
 }

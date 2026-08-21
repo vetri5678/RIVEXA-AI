@@ -144,6 +144,20 @@
       <scope>runtime</scope>
     </dependency>
 
+    <!-- Apache PDFBox — native Java PDF generation (no C libs, no iText licensing) -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>3.0.3</version>
+    </dependency>
+
+    <!-- Apache POI — Excel (.xlsx) generation -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.3.0</version>
+    </dependency>
+
   </dependencies>
 
   <build>
@@ -184,22 +198,22 @@
 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-resources-plugin</artifactId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
         <executions>
           <execution>
             <id>copy-react-dist</id>
             <phase>generate-resources</phase>
             <goals>
-              <goal>copy-resources</goal>
+              <goal>run</goal>
             </goals>
             <configuration>
-              <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>${project.basedir}/../dashboard/dist</directory>
-                  <filtering>false</filtering>
-                </resource>
-              </resources>
+              <target>
+                <mkdir dir="${project.build.outputDirectory}/static"/>
+                <copy todir="${project.build.outputDirectory}/static" failonerror="false">
+                  <fileset dir="${project.basedir}/../dashboard/dist" erroronmissingdir="false"/>
+                </copy>
+              </target>
             </configuration>
           </execution>
         </executions>

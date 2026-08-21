@@ -6,10 +6,13 @@ import Repositories from './pages/Repositories';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
-import ResetPassword from './pages/ResetPassword';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPasswordVerify from './pages/ResetPasswordVerify';
+import ResetPasswordSuccess from './pages/ResetPasswordSuccess';
 import Telemetry from './pages/Telemetry';
 import System from './pages/System';
 import Profile from './pages/Profile';
+import LoginActivity from './pages/LoginActivity';
 import OAuthCallback from './pages/OAuthCallback';
 import OAuthEmailRequired from './pages/OAuthEmailRequired';
 import RepositorySync from './pages/pipeline/RepositorySync';
@@ -18,11 +21,15 @@ import DataCleansing from './pages/pipeline/DataCleansing';
 import ModelEngine from './pages/pipeline/ModelEngine';
 import Inference from './pages/pipeline/Inference';
 import ShapXai from './pages/pipeline/ShapXai';
+import CodeVisionAI from './pages/CodeVisionAI';
 import RunPrediction from './pages/RunPrediction';
 import PredictionResult from './pages/PredictionResult';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
-const queryClient = new QueryClient({
+import authApi from './api/auth';
+import { getStoredUser, isAdminUser } from './utils/auth';
+
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
@@ -32,15 +39,68 @@ const queryClient = new QueryClient({
 });
 
 // Guard route to check login credentials
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode; requireAdmin?: boolean }> = ({ children, requireAdmin = false }) => {
   const token = localStorage.getItem('rv_access_token');
   if (!token) {
+    const currentHash = window.location.hash.replace(/^#/, '');
+    if (
+      currentHash &&
+      currentHash !== '/' &&
+      currentHash !== '/login' &&
+      currentHash !== '/register' &&
+      !currentHash.startsWith('/oauth2') &&
+      !currentHash.startsWith('/auth') &&
+      !currentHash.includes('repository-sync')
+    ) {
+      sessionStorage.setItem('rv_redirect_after_login', currentHash);
+    }
     return <Navigate to="/login" replace />;
   }
+
+  if (requireAdmin) {
+    const user = getStoredUser();
+    if (!isAdminUser(user)) {
+      sessionStorage.setItem('rv_toast_msg', 'Administrator access required');
+      sessionStorage.setItem('rv_toast_type', 'error');
+      return <Navigate to="/dashboard" replace />;
+    }
+  }
+
   return <>{children}</>;
 };
 
 export const App: React.FC = () => {
+  React.useEffect(() => {
+    const token = localStorage.getItem('rv_access_token');
+    if (token) {
+      authApi.getMe()
+        .then((userData) => {
+          if (userData && userData.role) {
+            localStorage.setItem('rv_user', JSON.stringify(userData));
+          }
+        })
+        .catch((err) => {
+          console.warn('[App] Session validation failed on startup. Purging stale auth state:', err);
+          localStorage.removeItem('rv_access_token');
+          localStorage.removeItem('rv_refresh_token');
+          localStorage.removeItem('rv_user');
+          localStorage.removeItem('rivexa_user');
+          localStorage.removeItem('rivexa_token');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+          queryClient.clear();
+          if (
+            window.location.hash &&
+            window.location.hash !== '#/login' &&
+            !window.location.hash.startsWith('#/oauth2') &&
+            !window.location.hash.startsWith('#/auth')
+          ) {
+            window.location.hash = '#/login';
+          }
+        });
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
@@ -48,7 +108,17 @@ export const App: React.FC = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/password-reset" element={<ResetPassword />} />
+
+          {/* Dedicated Password Reset Workflow Routes */}
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/password-reset" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ForgotPassword />} />
+
+          <Route path="/reset-password/verify" element={<ResetPasswordVerify />} />
+          <Route path="/password-reset/verify" element={<ResetPasswordVerify />} />
+
+          <Route path="/reset-password/success" element={<ResetPasswordSuccess />} />
+          <Route path="/password-reset/success" element={<ResetPasswordSuccess />} />
           <Route
             path="/"
             element={
@@ -86,6 +156,14 @@ export const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <System />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/login-activity"
+            element={
+              <ProtectedRoute requireAdmin={true}>
+                <LoginActivity />
               </ProtectedRoute>
             }
           />
@@ -145,6 +223,14 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/code-vision"
+            element={
+              <ProtectedRoute>
+                <CodeVisionAI />
+              </ProtectedRoute>
+            }
+          />
           {/* ── Prediction Workflow Routes ─────────────────────────────── */}
           <Route
             path="/prediction/run"
@@ -166,10 +252,21 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/settings/integrations" element={<Navigate to="/profile" replace />} />
+          <Route path="/settings" element={<Navigate to="/profile" replace />} />
+          <Route path="/auth/callback" element={<OAuthCallback />} />
           <Route path="/oauth2/callback" element={<OAuthCallback />} />
           <Route path="/auth/oauth-success" element={<OAuthCallback />} />
           <Route path="/oauth2/email-required" element={<OAuthEmailRequired />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Catch-all: authenticated → dashboard, unauthenticated → login */}
+          <Route
+            path="*"
+            element={
+              localStorage.getItem('rv_access_token')
+                ? <Navigate to="/dashboard" replace />
+                : <Navigate to="/login" replace />
+            }
+          />
         </Routes>
       </HashRouter>
     </QueryClientProvider>

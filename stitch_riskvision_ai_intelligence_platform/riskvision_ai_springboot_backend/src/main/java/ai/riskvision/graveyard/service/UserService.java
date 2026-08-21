@@ -118,7 +118,7 @@ public class UserService {
                 .email(entity.getEmail())
                 .username(entity.getUsername())
                 .fullName(entity.getFullName())
-                .role(entity.getRole())
+                .role(entity.getRole() != null ? entity.getRole().toUpperCase() : "VIEWER")
                 .isVerified(entity.getIsVerified())
                 .isActive(entity.getIsActive())
                 .provider(entity.getProvider())

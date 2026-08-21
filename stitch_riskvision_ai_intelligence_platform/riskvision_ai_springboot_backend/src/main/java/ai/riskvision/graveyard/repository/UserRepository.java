@@ -16,8 +16,10 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     Optional<UserEntity> findByEmail(String email);
     Optional<UserEntity> findByUsername(String username);
     Optional<UserEntity> findByResetToken(String resetToken);
+    Optional<UserEntity> findByGithubId(Long githubId);
     boolean existsByEmail(String email);
     boolean existsByUsername(String username);
+    boolean existsByGithubId(Long githubId);
 
     @Query("SELECT u FROM UserEntity u WHERE " +
            "(:query IS NULL OR LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) " +

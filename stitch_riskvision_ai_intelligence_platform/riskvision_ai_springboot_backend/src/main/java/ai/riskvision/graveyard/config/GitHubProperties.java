@@ -14,6 +14,16 @@ public class GitHubProperties {
      */
     private String token;
 
+    /**
+     * OAuth Client ID (optional, used for OAuth token revocation).
+     */
+    private String clientId;
+
+    /**
+     * OAuth Client Secret (optional, used for OAuth token revocation).
+     */
+    private String clientSecret;
+
     private Api api = new Api();
 
     @Data

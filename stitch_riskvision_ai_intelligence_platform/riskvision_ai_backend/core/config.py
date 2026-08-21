@@ -1,4 +1,4 @@
-"""
+﻿"""
 Application configuration with environment-based settings.
 
 Supports development (SQLite) and production (PostgreSQL) deployments.
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = "RiskVision AI — Software Project Graveyard Analyzer"
+    app_name: str = "RIVEXA — Software Project Graveyard Analyzer"
     app_version: str = "2.0.0"
     api_v1_prefix: str = "/api/v1"
     environment: str = Field(default="development", alias="ENVIRONMENT")
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
     smtp_user: Optional[str] = Field(default=None, alias="SMTP_USER")
     smtp_password: Optional[str] = Field(default=None, alias="SMTP_PASSWORD")
-    email_from: str = Field(default="noreply@riskvision.ai", alias="EMAIL_FROM")
+    email_from: str = Field(default="noreply@rivexa.ai", alias="EMAIL_FROM")
     frontend_url: str = Field(default="http://localhost:5176", alias="FRONTEND_URL")
 
     # Logging
@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     auto_retraining_enabled: bool = Field(default=False, alias="AUTO_RETRAINING_ENABLED")
 
     # Default admin bootstrap
-    bootstrap_admin_email: str = Field(default="admin@riskvision.ai", alias="BOOTSTRAP_ADMIN_EMAIL")
+    bootstrap_admin_email: str = Field(default="admin@rivexa.ai", alias="BOOTSTRAP_ADMIN_EMAIL")
     bootstrap_admin_password: str = Field(default="Admin@123456", alias="BOOTSTRAP_ADMIN_PASSWORD")
 
     # Centralized Networking

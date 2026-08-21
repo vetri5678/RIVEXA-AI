@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import WidgetWrapper from '../Common/WidgetWrapper';
 import ReactECharts from 'echarts-for-react';
 import { Search, Filter, ArrowUpDown, Download, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -51,7 +51,7 @@ export const RiskHeatmapWidget: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `RiskVision_Heatmap_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `RIVEXA_Heatmap_Export_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -223,8 +223,10 @@ export const RiskHeatmapWidget: React.FC = () => {
             No repository risk data found for the current search/filter.
           </div>
         ) : (
-          <div className="w-full" style={{ height: `${Math.max(220, yData.length * 36 + 60)}px` }}>
-            <ReactECharts option={option} style={{ height: '100%', width: '100%' }} />
+          <div className="w-full overflow-x-auto">
+            <div className="w-full min-w-[300px]" style={{ height: `${Math.max(220, yData.length * 36 + 60)}px` }}>
+              <ReactECharts option={option} style={{ height: '100%', width: '100%' }} />
+            </div>
           </div>
         )}
 

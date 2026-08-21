@@ -119,7 +119,42 @@ class PredictionEngineStage(PipelineStage):
         5. Reindex to exactly ``feature_names`` order.
         6. Apply scaling using stored scaler (transform only).
         """
-        df = pd.DataFrame([raw_data])
+        # Map incoming keys to the exact case-sensitive spaced columns expected by the model
+        mapped_data = {}
+        key_mapping = {
+            "budget": "Project Budget",
+            "project_budget": "Project Budget",
+            "actual_cost": "Actual Cost",
+            "timeline_months": "Estimated Duration",
+            "estimated_duration": "Estimated Duration",
+            "actual_duration": "Actual Duration",
+            "delay_ratio": "Schedule Delay",
+            "schedule_delay": "Schedule Delay",
+            "completion_pct": "Completion %",
+            "team_size": "Team Size",
+            "developer_experience": "Developer Experience",
+            "open_issues": "Open Issues",
+            "critical_bugs": "Critical Bugs",
+            "code_coverage": "Code Coverage",
+            "technical_debt": "Technical Debt",
+            "security_vulnerabilities": "Security Vulnerabilities",
+            "security_issues": "Security Vulnerabilities",
+            "dependency_vulnerabilities": "Dependency Vulnerabilities",
+            "repository_health": "Repository Health",
+            "build_failures": "Build Failures",
+            "deployment_failures": "Deployment Failures",
+            "requirement_changes": "Requirement Changes",
+            "requirements_changed": "Requirement Changes",
+            "customer_satisfaction": "Customer Satisfaction",
+            "priority": "Priority",
+            "department": "Department",
+            "project_type": "Project Type",
+        }
+        for k, v in raw_data.items():
+            mapped_key = key_mapping.get(k, k)
+            mapped_data[mapped_key] = v
+
+        df = pd.DataFrame([mapped_data])
 
         encoders = getattr(transformer_artifacts, "encoders", {})
         scaler = getattr(transformer_artifacts, "scaler", None)
@@ -199,6 +234,9 @@ class PredictionEngineStage(PipelineStage):
 
     def _predict(self, model, features: pd.DataFrame) -> tuple[int, float]:
         """Run prediction and return (label, failure_probability)."""
+        # (b) Feature vector debug log
+        logger.info("[DEBUG] (b) Feature vector right before model.predict():\n%s", features.to_dict(orient="records")[0])
+
         pred = int(model.predict(features)[0])
 
         prob = 0.5  # default
@@ -208,6 +246,12 @@ class PredictionEngineStage(PipelineStage):
                 prob = float(proba[1]) if len(proba) == 2 else float(max(proba))
             except Exception:
                 pass
+
+        # (c) Raw model output debug log
+        logger.info("[DEBUG] (c) Raw model output before formatting: pred_label=%s, probabilities=%s, selected_prob=%s", 
+                    pred, 
+                    getattr(model, "predict_proba", lambda x: "N/A")(features)[0].tolist() if hasattr(model, "predict_proba") else "N/A", 
+                    prob)
 
         return pred, prob
 
@@ -254,6 +298,23 @@ class PredictionEngineStage(PipelineStage):
         features_df = self._apply_preprocessing_pipeline(
             raw_input, transformer, feature_names,
         )
+
+        import hashlib
+        import json
+        canonical_features = {
+            col: round(float(features_df[col].iloc[0]), 6)
+            for col in sorted(features_df.columns)
+        }
+        feature_str = json.dumps(canonical_features, sort_keys=True)
+        feature_fingerprint = hashlib.sha256(feature_str.encode("utf-8")).hexdigest()[:16]
+
+        self.logger.info(
+            "[PREDICTION] project_id=%s featureFingerprint=%s features=%s",
+            raw_input.get("project_id", "unknown"),
+            feature_fingerprint,
+            canonical_features
+        )
+        payload.metadata["feature_fingerprint"] = feature_fingerprint
 
         # 2. Predict
         pred_label, failure_prob = self._predict(model, features_df)

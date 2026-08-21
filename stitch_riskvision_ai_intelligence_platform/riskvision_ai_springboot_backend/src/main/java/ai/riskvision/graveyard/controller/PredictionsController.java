@@ -1,12 +1,9 @@
 package ai.riskvision.graveyard.controller;
 
-import ai.riskvision.graveyard.dto.prediction.PredictionRunRequest;
-import ai.riskvision.graveyard.dto.prediction.PredictionResultResponse;
-import ai.riskvision.graveyard.entity.RepositoryEntity;
-import ai.riskvision.graveyard.entity.RepositoryPredictionEntity;
-import ai.riskvision.graveyard.repository.RepositoryEntityRepository;
-import ai.riskvision.graveyard.repository.RepositoryPredictionEntityRepository;
-import ai.riskvision.graveyard.service.RepoPredictionService;
+import ai.riskvision.graveyard.dto.prediction.*;
+import ai.riskvision.graveyard.entity.*;
+import ai.riskvision.graveyard.repository.*;
+import ai.riskvision.graveyard.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -141,29 +138,33 @@ public class PredictionsController {
     // ─── Helper ───────────────────────────────────────────────────────────────
 
     private PredictionResultResponse buildResponse(RepositoryPredictionEntity prediction, RepositoryEntity repo) {
+        double failureProb = prediction.getFailureProbability() != null ? prediction.getFailureProbability() : 0.0;
+        int computedRiskScore = prediction.getRiskScore() != null ? prediction.getRiskScore() : (int) Math.round(failureProb * 100);
+        double computedHealthScore = prediction.getHealthScore() != null ? prediction.getHealthScore() : Math.max(0.0, 100.0 - (failureProb * 100.0));
+
         return PredictionResultResponse.builder()
                 // Prediction fields
                 .predictionId(prediction.getId())
-                .predictionStatus(prediction.getPredictionStatus())
-                .modelVersion(prediction.getModelVersion())
-                .triggeredBy(prediction.getTriggeredBy())
+                .predictionStatus(prediction.getPredictionStatus() != null ? prediction.getPredictionStatus() : "COMPLETED")
+                .modelVersion(prediction.getModelVersion() != null ? prediction.getModelVersion() : "XGBoost-v1.0")
+                .triggeredBy(prediction.getTriggeredBy() != null ? prediction.getTriggeredBy() : "MANUAL")
                 .createdAt(prediction.getCreatedAt())
                 .failureProbability(prediction.getFailureProbability())
-                .riskScore(prediction.getRiskScore())
-                .riskLevel(prediction.getRiskLevel())
+                .riskScore(computedRiskScore)
+                .riskLevel(prediction.getRiskLevel() != null ? prediction.getRiskLevel() : "LOW")
                 .confidence(prediction.getConfidence())
-                .healthScore(prediction.getHealthScore())
+                .healthScore(computedHealthScore)
                 .featureImportanceJson(prediction.getFeatureImportanceJson())
                 .recommendationsJson(prediction.getRecommendationsJson())
                 // Repository fields (nullable-safe)
                 .repositoryId(prediction.getRepositoryId())
-                .repositoryName(repo != null ? repo.getRepositoryName() : "Unknown Repository")
+                .repositoryName(repo != null && repo.getRepositoryName() != null ? repo.getRepositoryName() : "Repository")
                 .repositoryUrl(repo != null ? repo.getRepositoryUrl() : null)
                 .organization(repo != null ? repo.getOrganization() : null)
                 .language(repo != null ? repo.getLanguage() : null)
-                .gitProvider(repo != null ? repo.getGitProvider() : null)
-                .branch(repo != null ? repo.getBranch() : null)
-                .visibility(repo != null ? repo.getVisibility() : null)
+                .gitProvider(repo != null && repo.getGitProvider() != null ? repo.getGitProvider() : "GITHUB")
+                .branch(repo != null && repo.getBranch() != null ? repo.getBranch() : "main")
+                .visibility(repo != null && repo.getVisibility() != null ? repo.getVisibility() : "PUBLIC")
                 .build();
     }
 }

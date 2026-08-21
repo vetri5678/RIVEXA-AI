@@ -16,9 +16,13 @@ import java.util.Map;
 public class PipelineStatusResponse {
     private String status;
     private String modelVersion;
+    private String loadedModel;
+    private Boolean trained;
     private Boolean databaseConnected;
     private String activeStage;
     private LocalDateTime timestamp;
+    private Integer reportsCount;
+    private Double accuracy;
     private Map<String, Object> metrics;
     private List<PipelineStageDTO> stages;
 }
