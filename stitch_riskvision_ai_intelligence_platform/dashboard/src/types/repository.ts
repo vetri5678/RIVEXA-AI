@@ -162,6 +162,9 @@ export interface RepositorySummary {
   predictionStatus: PredictionStatus;
   contributors: number;
   openIssues: number;
+  commitCount?: number;
+  pullRequests?: number;
+  buildSuccessRate?: number;
   lastCommitDate: string | null;
   lastSyncDate: string | null;
   lifecycleStage: LifecycleStage;

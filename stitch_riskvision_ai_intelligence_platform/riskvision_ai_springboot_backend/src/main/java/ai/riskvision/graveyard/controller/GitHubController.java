@@ -30,8 +30,10 @@ public class GitHubController {
     private final UserRepository userRepository;
     private final OAuthAccountRepository oauthAccountRepository;
     private final RepositoryEntityRepository repositoryEntityRepository;
+    private final ai.riskvision.graveyard.repository.RepositoryPredictionEntityRepository predictionRepository;
+    private final ai.riskvision.graveyard.repository.RepositoryMetricsEntityRepository repoMetricsRepository;
+    private final ai.riskvision.graveyard.repository.RepositoryActivityEntityRepository activityRepository;
     private final ai.riskvision.graveyard.service.RepositorySyncService repositorySyncService;
-    private final ai.riskvision.graveyard.service.RepoPredictionService predictionService;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     // ─── HEALTH & RATE LIMIT ───────────────────────────────────────────────────
@@ -46,6 +48,29 @@ public class GitHubController {
     public ResponseEntity<Map<String, Object>> getRateLimit() {
         log.debug("HTTP GET /api/github/rate-limit requested");
         return ResponseEntity.ok(gitHubClient.getRateLimit());
+    }
+
+    @GetMapping({"/api/v1/debug/github-sync", "/api/debug/github-sync"})
+    public ResponseEntity<Map<String, Object>> getSyncDebugInfo(Principal principal) {
+        String principalName = principal != null ? principal.getName() : null;
+        if (principalName == null) {
+            return ResponseEntity.ok(Map.of(
+                    "syncStatus", "UNAUTHENTICATED",
+                    "message", "Must be logged in to view GitHub sync debug info"
+            ));
+        }
+
+        Optional<UserEntity> userOpt = userRepository.findByEmail(principalName)
+                .or(() -> userRepository.findByUsername(principalName));
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "syncStatus", "USER_NOT_FOUND",
+                    "message", "Authenticated user record not found"
+            ));
+        }
+
+        UserEntity user = userOpt.get();
+        return ResponseEntity.ok(repositorySyncService.getLastSyncDebugInfo(user.getId()));
     }
 
     // ─── REPOSITORY METADATA & DATA ────────────────────────────────────────────
@@ -236,75 +261,84 @@ public class GitHubController {
     public ResponseEntity<Map<String, Object>> getConnectionStatus(Principal principal) {
         String principalName = principal != null ? principal.getName() : null;
         if (principalName == null) {
-            return ResponseEntity.ok(Map.of(
-                    "connected", false,
-                    "status", "DISCONNECTED",
-                    "repositoryCount", 0
-            ));
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("connected", false);
+            result.put("status", "DISCONNECTED");
+            result.put("githubUser", null);
+            result.put("repositoryCount", 0);
+            return ResponseEntity.ok(result);
         }
 
         Optional<UserEntity> userOpt = userRepository.findByEmail(principalName)
                 .or(() -> userRepository.findByUsername(principalName));
         if (userOpt.isEmpty()) {
-            return ResponseEntity.ok(Map.of(
-                    "connected", false,
-                    "status", "DISCONNECTED",
-                    "repositoryCount", 0
-            ));
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("connected", false);
+            result.put("status", "DISCONNECTED");
+            result.put("githubUser", null);
+            result.put("repositoryCount", 0);
+            return ResponseEntity.ok(result);
         }
 
         UserEntity user = userOpt.get();
         Optional<OAuthAccountEntity> oauthOpt = oauthAccountRepository.findByUserAndProvider(user, "github");
-        long repoCount = repositoryEntityRepository.countByUserIdAndGitProvider(user.getId(), "github");
-        if (repoCount == 0) {
-            repoCount = repositoryEntityRepository.countByUserId(user.getId());
-        }
-
         boolean hasOAuthToken = oauthOpt.isPresent() && oauthOpt.get().getAccessToken() != null && !oauthOpt.get().getAccessToken().trim().isEmpty();
-        boolean isConnected = hasOAuthToken || repoCount > 0;
 
-        if (!isConnected) {
+        // STRICT AUTHORITATIVE RULE: GitHub connection requires a valid OAuthAccountEntity with an active token belonging to current user
+        if (!hasOAuthToken) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("connected", false);
             result.put("status", "DISCONNECTED");
+            result.put("githubUser", null);
             result.put("repositoryCount", 0);
             return ResponseEntity.ok(result);
         }
+
+        long repoCount = repositoryEntityRepository.countByUserIdAndGitProvider(user.getId(), "github");
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("connected", true);
         result.put("status", "CONNECTED");
         result.put("repositoryCount", repoCount);
-        if (oauthOpt.isPresent()) {
-            OAuthAccountEntity oauth = oauthOpt.get();
-            result.put("githubUserId", oauth.getProviderUserId());
-            result.put("connectedAt", oauth.getCreatedAt() != null ? oauth.getCreatedAt().toString() : null);
-        } else {
-            result.put("githubUserId", user.getGithubId());
-            result.put("connectedAt", null);
-        }
+        OAuthAccountEntity oauth = oauthOpt.get();
+        result.put("githubUserId", oauth.getProviderUserId());
+        result.put("connectedAt", oauth.getCreatedAt() != null ? oauth.getCreatedAt().toString() : null);
         result.put("githubUsername", user.getUsername() != null ? user.getUsername() : user.getEmail().split("@")[0]);
         result.put("avatarUrl", user.getAvatarUrl());
         result.put("lastSyncedAt", java.time.LocalDateTime.now().atOffset(java.time.ZoneOffset.UTC).toString());
 
-        if (hasOAuthToken) {
-            try {
-                Map<String, Object> ghProfile = gitHubClient.getAuthenticatedUserProfile(oauthOpt.get().getAccessToken().trim());
-                if (ghProfile != null) {
-                    if (ghProfile.get("login") != null) result.put("githubUsername", ghProfile.get("login"));
-                    if (ghProfile.get("avatar_url") != null) result.put("avatarUrl", ghProfile.get("avatar_url"));
-                    if (ghProfile.get("id") != null) result.put("githubUserId", ghProfile.get("id").toString());
+        Map<String, Object> ghUserObj = new LinkedHashMap<>();
+        ghUserObj.put("id", oauth.getProviderUserId());
+        ghUserObj.put("login", user.getUsername());
+        ghUserObj.put("avatarUrl", user.getAvatarUrl());
+
+        try {
+            Map<String, Object> ghProfile = gitHubClient.getAuthenticatedUserProfile(oauth.getAccessToken().trim());
+            if (ghProfile != null) {
+                if (ghProfile.get("login") != null) {
+                    result.put("githubUsername", ghProfile.get("login"));
+                    ghUserObj.put("login", ghProfile.get("login"));
                 }
-            } catch (Exception ex) {
-                log.warn("Could not enrich GitHub connection status with live profile: {}", ex.getMessage());
+                if (ghProfile.get("avatar_url") != null) {
+                    result.put("avatarUrl", ghProfile.get("avatar_url"));
+                    ghUserObj.put("avatarUrl", ghProfile.get("avatar_url"));
+                }
+                if (ghProfile.get("id") != null) {
+                    result.put("githubUserId", ghProfile.get("id").toString());
+                    ghUserObj.put("id", ghProfile.get("id").toString());
+                }
             }
+        } catch (Exception ex) {
+            log.warn("Could not enrich GitHub connection status with live profile: {}", ex.getMessage());
         }
 
+        result.put("githubUser", ghUserObj);
         return ResponseEntity.ok(result);
     }
 
-    @RequestMapping(value = {"/api/v1/github/disconnect", "/api/v1/auth/disconnect/github"}, method = {RequestMethod.POST, RequestMethod.DELETE})
+    @RequestMapping(value = {"/api/v1/github/connection", "/api/v1/github/disconnect", "/api/v1/auth/disconnect/github"}, method = {RequestMethod.POST, RequestMethod.DELETE})
     public ResponseEntity<Map<String, Object>> disconnectGitHub(Principal principal) {
+        long startNs = System.nanoTime();
         String principalName = principal != null ? principal.getName() : null;
         if (principalName == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
@@ -326,43 +360,57 @@ public class GitHubController {
 
         UserEntity user = userOpt.get();
         Optional<OAuthAccountEntity> oauthOpt = oauthAccountRepository.findByUserAndProvider(user, "github");
-        if (oauthOpt.isEmpty()) {
-            log.info("[GITHUB DISCONNECT] User {} requested GitHub disconnect but no connection exists", user.getEmail());
-            return ResponseEntity.ok(Map.of(
-                    "success", false,
-                    "code", "GITHUB_NOT_CONNECTED",
-                    "message", "No GitHub account is currently connected",
-                    "connected", false
-            ));
-        }
+        String accessTokenToRevoke = (oauthOpt.isPresent() && oauthOpt.get().getAccessToken() != null)
+                ? oauthOpt.get().getAccessToken().trim() : null;
 
-        OAuthAccountEntity oauth = oauthOpt.get();
-        String tokenToRevoke = oauth.getAccessToken();
-
-        // Perform best-effort remote OAuth token revocation (OUTSIDE DB transaction boundary)
-        if (tokenToRevoke != null && !tokenToRevoke.trim().isEmpty()) {
-            try {
-                gitHubClient.revokeOAuthToken(tokenToRevoke.trim());
-            } catch (Exception ex) {
-                log.warn("[GITHUB DISCONNECT] Token revocation failed: {}", ex.getMessage());
-            }
-        }
-
-        // Perform DB deletions inside programmatic transaction template
+        long dbStartNs = System.nanoTime();
+        // Fast synchronous connection state update in database
         transactionTemplate.executeWithoutResult(status -> {
-            oauthAccountRepository.delete(oauth);
+            oauthOpt.ifPresent(oauthAccountRepository::delete);
             if (user.getGithubId() != null) {
                 user.setGithubId(null);
                 userRepository.save(user);
             }
+        });
+        double dbMs = (System.nanoTime() - dbStartNs) / 1_000_000.0;
+
+        // Offload remote token revocation & cascading repository cleanup to non-blocking background async task
+        double apiMs = 0.0;
+        double cleanupMs = 0.0;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            long bgStartNs = System.nanoTime();
+            if (accessTokenToRevoke != null && !accessTokenToRevoke.isEmpty()) {
+                try {
+                    gitHubClient.revokeOAuthToken(accessTokenToRevoke);
+                } catch (Exception ex) {
+                    log.warn("[GITHUB DISCONNECT] Async token revocation failed: {}", ex.getMessage());
+                }
+            }
+            double bgApiMs = (System.nanoTime() - bgStartNs) / 1_000_000.0;
+
+            long cleanupStartNs = System.nanoTime();
             try {
+                List<ai.riskvision.graveyard.entity.RepositoryEntity> userGhRepos =
+                        repositoryEntityRepository.findByUserIdAndGitProvider(user.getId(), "github");
+                for (ai.riskvision.graveyard.entity.RepositoryEntity repo : userGhRepos) {
+                    predictionRepository.deleteByRepositoryId(repo.getId());
+                    repoMetricsRepository.deleteByRepositoryId(repo.getId());
+                    activityRepository.deleteByRepositoryId(repo.getId());
+                }
                 repositoryEntityRepository.deleteByUserIdAndGitProvider(user.getId(), "github");
             } catch (Exception ex) {
-                log.warn("[GITHUB DISCONNECT] Could not delete cached repositories for user {}: {}", user.getEmail(), ex.getMessage());
+                log.warn("[GITHUB DISCONNECT] Background repo cleanup error: {}", ex.getMessage());
             }
+            double bgCleanupMs = (System.nanoTime() - cleanupStartNs) / 1_000_000.0;
+            log.info("[PERF_METRICS] disconnect.background_api_ms={} disconnect.background_cleanup_ms={}",
+                    Math.round(bgApiMs * 100.0) / 100.0, Math.round(bgCleanupMs * 100.0) / 100.0);
         });
 
-        log.info("[GITHUB DISCONNECT] Disconnected GitHub account (providerUserId={}) for user {}", oauth.getProviderUserId(), user.getEmail());
+        double totalMs = (System.nanoTime() - startNs) / 1_000_000.0;
+        log.info("[PERF_METRICS] disconnect.request.total_ms={} disconnect.database_ms={} disconnect.github_api_ms={} disconnect.cleanup_ms={}",
+                Math.round(totalMs * 100.0) / 100.0, Math.round(dbMs * 100.0) / 100.0, apiMs, cleanupMs);
+
+        log.info("[GITHUB DISCONNECT] Disconnected GitHub account for user {} in {}ms", user.getEmail(), Math.round(totalMs * 100.0) / 100.0);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -402,12 +450,17 @@ public class GitHubController {
 
         try {
             String token = oauthOpt.get().getAccessToken().trim();
-            List<ai.riskvision.graveyard.entity.RepositoryEntity> synced = repositorySyncService.syncUserGitHubRepositories(user, token);
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    repositorySyncService.syncUserGitHubRepositories(user, token);
+                } catch (Exception ex) {
+                    log.warn("[GITHUB SYNC] Async repo sync error: {}", ex.getMessage());
+                }
+            });
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "connected", true,
-                    "message", "Synchronization complete",
-                    "syncedCount", synced.size()
+                    "message", "Repository synchronization initiated in background"
             ));
         } catch (Exception ex) {
             log.error("[GITHUB SYNC API] Manual sync failed for user {}: {}", user.getEmail(), ex.getMessage(), ex);
@@ -451,24 +504,15 @@ public class GitHubController {
         String userToken = oauthOpt.get().getAccessToken().trim();
 
         try {
-            // Synchronize and persist user repositories into DB for user isolation and dashboard metrics
-            try {
-                List<ai.riskvision.graveyard.entity.RepositoryEntity> synced = repositorySyncService.syncUserGitHubRepositories(user, userToken);
-                log.info("[GITHUB SYNC] Synchronized {} repositories to database for user id={}, email={}", synced.size(), user.getId(), user.getEmail());
-
-                // Auto-run initial prediction for newly synchronized repositories
-                for (ai.riskvision.graveyard.entity.RepositoryEntity repo : synced) {
-                    if ("PENDING".equalsIgnoreCase(repo.getPredictionStatus()) || repo.getFailureProbability() == null || repo.getFailureProbability() == 0.0) {
-                        try {
-                            predictionService.runPrediction(repo.getId(), user.getEmail());
-                        } catch (Exception predEx) {
-                            log.debug("[GITHUB SYNC] Initial prediction skipped for repo {}: {}", repo.getRepositoryName(), predEx.getMessage());
-                        }
-                    }
+            // Trigger background repository sync without blocking the immediate response
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    List<ai.riskvision.graveyard.entity.RepositoryEntity> synced = repositorySyncService.syncUserGitHubRepositories(user, userToken);
+                    log.info("[GITHUB SYNC] Background sync complete for user id={}, email={}. Synced {} repos.", user.getId(), user.getEmail(), synced.size());
+                } catch (Exception syncEx) {
+                    log.warn("[GITHUB SYNC] Background repo sync error: {}", syncEx.getMessage());
                 }
-            } catch (Exception syncEx) {
-                log.warn("[GITHUB SYNC] Synchronizing repositories to DB encountered error: {}", syncEx.getMessage());
-            }
+            });
 
             List<Map<String, Object>> rawRepos = gitHubClient.getUserRepositories(userToken, page, perPage, visibility, affiliation, sort);
             log.info("[GITHUB API] GET /user/repos succeeded. Returned {} repositories.", rawRepos != null ? rawRepos.size() : 0);

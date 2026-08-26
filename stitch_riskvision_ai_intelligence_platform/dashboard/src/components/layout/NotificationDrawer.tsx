@@ -10,10 +10,26 @@ interface NotificationDrawerProps {
 export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, onClose }) => {
   const { data: alerts, isLoading } = useAlerts();
 
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full sm:w-96 max-w-full bg-[#0B1220]/95 border-l border-white/[0.08] shadow-2xl z-50 flex flex-col backdrop-blur-2xl animate-slide-in-right">
+    <>
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-49 transition-opacity cursor-pointer"
+        onClick={onClose}
+      />
+      <div className="fixed inset-y-0 right-0 w-full sm:w-96 max-w-full bg-[#0B1220]/95 border-l border-white/[0.08] shadow-2xl z-50 flex flex-col backdrop-blur-2xl animate-slide-in-right">
       {/* Header */}
       <div className="p-5 border-b border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -96,6 +112,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
         )}
       </div>
     </div>
+    </>
   );
 };
 

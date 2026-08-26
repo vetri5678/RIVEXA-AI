@@ -54,5 +54,9 @@ def reset_authentication_database():
         return False
 
 if __name__ == "__main__":
+    if "--confirm-reset" not in sys.argv and os.getenv("ALLOW_DATABASE_RESET") != "true":
+        print("🛑 ERROR: Destructive authentication database reset blocked!")
+        print("   To execute, provide the '--confirm-reset' flag or set environment variable ALLOW_DATABASE_RESET=true.")
+        sys.exit(1)
     reset_authentication_database()
 

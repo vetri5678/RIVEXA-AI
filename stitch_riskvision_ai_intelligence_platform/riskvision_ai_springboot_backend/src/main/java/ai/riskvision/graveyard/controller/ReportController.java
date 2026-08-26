@@ -1,6 +1,7 @@
 package ai.riskvision.graveyard.controller;
 
 import ai.riskvision.graveyard.aspect.Auditable;
+import ai.riskvision.graveyard.service.N8nWebhookService;
 import ai.riskvision.graveyard.service.ReportGenerationService;
 import ai.riskvision.graveyard.service.PdfReportService;
 import ai.riskvision.graveyard.service.ExcelReportService;
@@ -29,6 +30,7 @@ public class ReportController {
     private final ReportGenerationService reportGenerationService;
     private final RepositoryPredictionEntityRepository predictionRepository;
     private final RepositoryEntityRepository repositoryRepository;
+    private final N8nWebhookService n8nWebhookService;
 
     @GetMapping("/executive/json")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'ANALYST')")
@@ -65,6 +67,7 @@ public class ReportController {
 
     @GetMapping("/download/pdf")
     @PreAuthorize("isAuthenticated()")
+    @Auditable(action = "REPORT_EXPORT_PDF", module = "REPORT", severity = "LOW")
     public ResponseEntity<byte[]> downloadPdf(
             @RequestParam(value = "prediction_id", required = false) String predictionId,
             @RequestParam(value = "project_id", required = false) String projectId,
@@ -88,9 +91,25 @@ public class ReportController {
                     .replaceAll("[^a-zA-Z0-9-_]", "_");
             headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"RiskVision_" + safeName + "_Risk_Report.pdf\"");
             
+            if (n8nWebhookService != null) {
+                try {
+                    n8nWebhookService.triggerReportGeneratedWebhook(
+                            prediction != null ? prediction.getId().toString() : UUID.randomUUID().toString(),
+                            repo != null ? repo.getId().toString() : projectId,
+                            "PREDICTION_RISK",
+                            "PDF",
+                            principal != null ? principal.getName() : "SYSTEM"
+                    );
+                } catch (Exception ex) {
+                    log.warn("[ReportController] Non-critical error triggering report webhook: {}", ex.getMessage());
+                }
+            }
+
             log.info("[ReportController] PDF report generated successfully ({} bytes) for repo '{}'",
                     pdfBytes.length, repo.getRepositoryName());
             return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Throwable e) {
             log.error("[ReportController] PDF report generation failed for repo '{}': {}",
                     repo != null ? repo.getRepositoryName() : "unknown", e.getMessage(), e);
@@ -100,6 +119,7 @@ public class ReportController {
 
     @GetMapping("/download/excel")
     @PreAuthorize("isAuthenticated()")
+    @Auditable(action = "REPORT_EXPORT_EXCEL", module = "REPORT", severity = "LOW")
     public ResponseEntity<byte[]> downloadExcel(
             @RequestParam(value = "prediction_id", required = false) String predictionId,
             @RequestParam(value = "project_id", required = false) String projectId,
@@ -123,9 +143,25 @@ public class ReportController {
                     .replaceAll("[^a-zA-Z0-9-_]", "_");
             headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"RiskVision_" + safeName + "_Risk_Report.xlsx\"");
             
+            if (n8nWebhookService != null) {
+                try {
+                    n8nWebhookService.triggerReportGeneratedWebhook(
+                            prediction != null ? prediction.getId().toString() : UUID.randomUUID().toString(),
+                            repo != null ? repo.getId().toString() : projectId,
+                            "PREDICTION_RISK",
+                            "EXCEL",
+                            principal != null ? principal.getName() : "SYSTEM"
+                    );
+                } catch (Exception ex) {
+                    log.warn("[ReportController] Non-critical error triggering report webhook: {}", ex.getMessage());
+                }
+            }
+            
             log.info("[ReportController] Excel report generated successfully ({} bytes) for repo '{}'",
                     excelBytes.length, repo.getRepositoryName());
             return new ResponseEntity<>(excelBytes, headers, HttpStatus.OK);
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Throwable e) {
             log.error("[ReportController] Excel report generation failed for repo '{}': {}",
                     repo != null ? repo.getRepositoryName() : "unknown", e.getMessage(), e);
@@ -133,7 +169,20 @@ public class ReportController {
         }
     }
 
-    private record ReportContext(RepositoryPredictionEntity prediction, RepositoryEntity repo) {}
+    @PostMapping("/batch/zip")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'ANALYST')")
+    @Auditable(action = "REPORT_EXPORT_BATCH_ZIP", module = "REPORT", severity = "MEDIUM")
+    public ResponseEntity<byte[]> exportBatchZip(@RequestBody(required = false) java.util.List<String> repositoryIds) {
+        log.info("[ReportController] Batch ZIP export requested for {} repositories",
+                repositoryIds != null ? repositoryIds.size() : 0);
+        byte[] zipBytes = reportGenerationService.generateBatchZipPackageForRepos(repositoryIds);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"RiskVision_Batch_Reports.zip\"")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(zipBytes);
+    }
+
+    private static record ReportContext(RepositoryPredictionEntity prediction, RepositoryEntity repo) {}
 
     private ReportContext validateAndGetReportContext(String predictionId, String projectId, Principal principal) {
         if (principal == null) {
@@ -142,12 +191,7 @@ public class ReportController {
 
         String targetId = (predictionId != null && !predictionId.isBlank()) ? predictionId : projectId;
         if (targetId == null || targetId.trim().isEmpty()) {
-            RepositoryEntity defaultRepo = repositoryRepository.findAll().stream().findFirst().orElse(null);
-            if (defaultRepo != null) {
-                targetId = defaultRepo.getId().toString();
-            } else {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing prediction_id or project_id parameter");
-            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing prediction_id or project_id parameter");
         }
 
         UUID uuid;
@@ -170,28 +214,13 @@ public class ReportController {
         }
 
         if (repo == null) {
-            // Try matching repo by first available
-            repo = repositoryRepository.findAll().stream().findFirst().orElse(null);
-            if (repo == null) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository not found for ID: " + targetId);
-            }
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository not found for ID: " + targetId);
         }
 
         if (prediction == null) {
-            // Synthesize baseline prediction for repository that has no prediction run recorded yet
-            prediction = RepositoryPredictionEntity.builder()
-                    .id(UUID.randomUUID())
-                    .repositoryId(repo.getId())
-                    .failureProbability(repo.getFailureProbability() != null ? repo.getFailureProbability() : 0.1)
-                    .riskScore(repo.getHealthScore() != null ? (int) Math.round(100 - repo.getHealthScore()) : 10)
-                    .riskLevel(repo.getRiskLevel() != null ? repo.getRiskLevel() : "LOW")
-                    .confidence(repo.getAiConfidence() != null ? repo.getAiConfidence() : 0.8)
-                    .healthScore(repo.getHealthScore() != null ? repo.getHealthScore() : 90.0)
-                    .modelVersion("xgboost-v2.x")
-                    .predictionStatus(repo.getPredictionStatus() != null ? repo.getPredictionStatus() : "PENDING")
-                    .triggeredBy("SYSTEM_REPORT")
-                    .createdAt(java.time.LocalDateTime.now())
-                    .build();
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "No prediction analysis data exists for repository: " + repo.getRepositoryName() +
+                            ". Please run an AI prediction analysis before downloading reports.");
         }
 
         return new ReportContext(prediction, repo);

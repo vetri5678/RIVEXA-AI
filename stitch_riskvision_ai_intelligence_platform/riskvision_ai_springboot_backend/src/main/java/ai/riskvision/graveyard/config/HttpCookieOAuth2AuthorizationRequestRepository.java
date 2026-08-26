@@ -49,35 +49,45 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
             );
         }
 
-        String initiatingUser = request.getParameter("user_email");
-        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
-            initiatingUser = request.getParameter("userId");
-        }
-        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
-            initiatingUser = request.getParameter("email");
-        }
-        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
-            initiatingUser = request.getParameter("user");
+        String uri = request.getRequestURI();
+        boolean isGoogleRequest = uri != null && uri.toLowerCase().contains("google");
+        boolean isGitHubRequest = uri != null && uri.toLowerCase().contains("github");
+
+        if (isGoogleRequest) {
+            // Google login is strictly Application Authentication. Delete any residual initiating user cookie.
+            CookieUtils.deleteCookie(request, response, INITIATING_USER_COOKIE_NAME);
+            return;
         }
 
-        // If not found in query params, try reading existing initiating user cookie from current request
-        if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
-            initiatingUser = CookieUtils.getCookie(request, INITIATING_USER_COOKIE_NAME)
-                    .map(jakarta.servlet.http.Cookie::getValue).orElse(null);
-        }
+        String initiatingUser = null;
+        if (isGitHubRequest) {
+            initiatingUser = request.getParameter("user_email");
+            if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
+                initiatingUser = request.getParameter("userId");
+            }
+            if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
+                initiatingUser = request.getParameter("email");
+            }
+            if (initiatingUser == null || initiatingUser.trim().isEmpty()) {
+                initiatingUser = request.getParameter("user");
+            }
 
-        // Try resolving authenticated principal if available
-        if ((initiatingUser == null || initiatingUser.trim().isEmpty()) && request.getUserPrincipal() != null) {
-            initiatingUser = request.getUserPrincipal().getName();
-        }
+            // If an authenticated principal exists, use it as the initiating user for GitHub integration
+            if ((initiatingUser == null || initiatingUser.trim().isEmpty()) && request.getUserPrincipal() != null) {
+                initiatingUser = request.getUserPrincipal().getName();
+            }
 
-        if (initiatingUser != null && !initiatingUser.trim().isEmpty()) {
-            CookieUtils.addCookie(
-                    response,
-                    INITIATING_USER_COOKIE_NAME,
-                    initiatingUser.trim(),
-                    COOKIE_EXPIRE_SECONDS
-            );
+            if (initiatingUser != null && !initiatingUser.trim().isEmpty()) {
+                CookieUtils.addCookie(
+                        response,
+                        INITIATING_USER_COOKIE_NAME,
+                        initiatingUser.trim(),
+                        COOKIE_EXPIRE_SECONDS
+                );
+            } else {
+                // Unauthenticated GitHub sign-in attempt: clear any residual initiating user cookie
+                CookieUtils.deleteCookie(request, response, INITIATING_USER_COOKIE_NAME);
+            }
         }
     }
 
@@ -91,6 +101,10 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     public void removeAuthorizationRequestCookies(HttpServletRequest request, HttpServletResponse response) {
         CookieUtils.deleteCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME);
         CookieUtils.deleteCookie(request, response, REDIRECT_URI_PARAM_COOKIE_NAME);
+        // Do NOT delete INITIATING_USER_COOKIE_NAME here so CustomOAuth2SuccessHandler can read it during OAuth callback.
+    }
+
+    public void removeInitiatingUserCookie(HttpServletRequest request, HttpServletResponse response) {
         CookieUtils.deleteCookie(request, response, INITIATING_USER_COOKIE_NAME);
     }
 }

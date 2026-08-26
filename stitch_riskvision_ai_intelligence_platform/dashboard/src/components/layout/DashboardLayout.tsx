@@ -3,29 +3,45 @@ import { useQueryClient } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import NotificationDrawer from './NotificationDrawer';
+import GlobalSearchModal from './GlobalSearchModal';
 import AuroraBackground from './AuroraBackground';
 import authApi from '../../api/auth';
+import { clearAuthStorageAndCookies } from '../../utils/auth';
 import { AlertCircle, X, CheckCircle, Info } from 'lucide-react';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  onSearchChange: (val: string) => void;
-  searchValue: string;
+  onSearchChange?: (val: string) => void;
+  searchValue?: string;
   onQuickAction: (action: string) => void;
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   onSearchChange,
-  searchValue,
+  searchValue = '',
   onQuickAction,
 }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([]);
+
+  // Global Cmd + K / Ctrl + K shortcut handler
+  React.useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchModalOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   React.useEffect(() => {
     const msg = sessionStorage.getItem('rv_toast_msg');
@@ -47,19 +63,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     } catch (err) {
       console.warn('Logout request failed', err);
     } finally {
-      queryClient.clear();
-      // Clear ALL auth-related state from storage
-      localStorage.removeItem('rv_access_token');
-      localStorage.removeItem('rv_refresh_token');
-      localStorage.removeItem('rv_user');
-      localStorage.removeItem('rivexa_user');
-      localStorage.removeItem('rivexa_token');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      sessionStorage.removeItem('rv_toast_msg');
+      try {
+        await queryClient.cancelQueries();
+        queryClient.clear();
+      } catch (cacheErr) {
+        console.warn('Cache clearing error during logout', cacheErr);
+      }
+      clearAuthStorageAndCookies();
       window.location.href = '/#/';
     }
   };
+
+  React.useEffect(() => {
+    if (isMobileDrawerOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileDrawerOpen]);
 
   return (
     <div className="min-h-screen bg-[#050816] text-slate-100 flex font-sans antialiased relative overflow-x-hidden">
@@ -69,7 +93,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {/* Mobile Off-Canvas Drawer Backdrop */}
       {isMobileDrawerOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden transition-opacity"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden transition-opacity cursor-pointer"
           onClick={() => setIsMobileDrawerOpen(false)}
         />
       )}
@@ -85,7 +109,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Main Workspace Frame */}
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 relative z-10 ${
+        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 relative z-10 min-w-0 ${
           sidebarCollapsed ? 'pl-0 lg:pl-16' : 'pl-0 lg:pl-64'
         }`}
       >
@@ -93,16 +117,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           onSearchChange={onSearchChange}
           searchValue={searchValue}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
+          onOpenSearchModal={() => setIsSearchModalOpen(true)}
           onQuickAction={onQuickAction}
           collapsed={sidebarCollapsed}
           onToggleMobileMenu={() => setIsMobileDrawerOpen((v) => !v)}
         />
 
         {/* Dynamic Content Viewport */}
-        <main className="flex-1 pt-20 px-3 sm:px-6 pb-12 overflow-y-auto max-w-[1920px] w-full mx-auto animate-fade-in-up">
+        <main className="flex-1 pt-20 px-3 sm:px-6 pb-12 overflow-y-auto min-w-0 w-full max-w-[1920px] mx-auto animate-fade-in-up">
           {children}
         </main>
       </div>
+
+      {/* Global Search Command Palette Modal */}
+      <GlobalSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+      />
 
       {/* Notification Drawer Component */}
       <NotificationDrawer

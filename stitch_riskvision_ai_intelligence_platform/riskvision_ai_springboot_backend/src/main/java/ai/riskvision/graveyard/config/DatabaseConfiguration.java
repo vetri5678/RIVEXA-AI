@@ -89,13 +89,30 @@ public class DatabaseConfiguration {
                 log.info("Database Product: {}", connection.getMetaData().getDatabaseProductName());
                 log.info("Database Version: {}", connection.getMetaData().getDatabaseProductVersion());
 
-                // Auto-migrate schema: Ensure github_id column exists on users table
+                // Auto-migrate schema: Ensure required columns exist on repositories & users tables
                 try (java.sql.Statement stmt = connection.createStatement()) {
+                    stmt.execute("ALTER TABLE repositories ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE");
+                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_repositories_user_id ON repositories(user_id)");
+                    stmt.execute("ALTER TABLE repositories ADD COLUMN IF NOT EXISTS github_repository_id VARCHAR(100)");
+                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_repositories_github_repo_id ON repositories(github_repository_id)");
                     stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS github_id BIGINT UNIQUE");
                     stmt.execute("CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)");
-                    log.info("✅ Ensured github_id column exists on users table in Supabase PostgreSQL.");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'email'");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_user_id VARCHAR(255)");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500)");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INT DEFAULT 0");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT DEFAULT 0");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP WITH TIME ZONE");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'UTC'");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(20) DEFAULT 'en'");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code VARCHAR(10)");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMP WITH TIME ZONE");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences TEXT");
+                    stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_settings TEXT");
+                    log.info("✅ Ensured all required database columns exist in PostgreSQL database.");
                 } catch (SQLException e) {
-                    log.warn("Schema migration notice (github_id column): {}", e.getMessage());
+                    log.warn("Schema migration notice: {}", e.getMessage());
                 }
             } catch (SQLException e) {
                 log.error("❌ Database connectivity test: FAILED - {}", e.getMessage());

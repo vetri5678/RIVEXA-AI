@@ -4,13 +4,13 @@ import type { AxiosInstance } from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 const ML_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL || '/api/v1';
 const LLM_BASE_URL = import.meta.env.VITE_LLM_SERVICE_URL || '/api/v1';
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:8080`;
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
 export { WS_BASE_URL };
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -18,7 +18,7 @@ export const apiClient = axios.create({
 
 export const mlApiClient = axios.create({
   baseURL: ML_BASE_URL,
-  timeout: 30000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -26,7 +26,7 @@ export const mlApiClient = axios.create({
 
 export const llmApiClient = axios.create({
   baseURL: LLM_BASE_URL,
-  timeout: 30000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -188,6 +188,15 @@ function applyCommonInterceptors(client: AxiosInstance) {
           handleLogout();
           return Promise.reject(formatError(refreshError));
         }
+      }
+
+      // Retry transient connection errors during initial startup (e.g., backend initializing)
+      const isConnError = !error.response || error.response?.status === 503;
+      const retryCount = originalRequest?._connRetryCount || 0;
+      if (isConnError && retryCount < 3 && originalRequest) {
+        originalRequest._connRetryCount = retryCount + 1;
+        await new Promise((resolve) => setTimeout(resolve, 800 * (retryCount + 1)));
+        return client(originalRequest);
       }
 
       return Promise.reject(formatError(error));

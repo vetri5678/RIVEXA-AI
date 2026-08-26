@@ -58,6 +58,11 @@ export const githubApi = {
     return data;
   },
 
+  getSyncDebugInfo: async (): Promise<any> => {
+    const { data } = await apiClient.get('/debug/github-sync');
+    return data;
+  },
+
   getRepoMetadata: async (owner: string, repo: string): Promise<any> => {
     const { data } = await apiClient.get(`/github/repos/${owner}/${repo}`);
     return data;

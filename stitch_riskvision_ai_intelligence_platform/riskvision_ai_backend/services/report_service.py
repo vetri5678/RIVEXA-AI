@@ -43,20 +43,7 @@ class ReportService:
             row = db.execute(query, {"rid": project_id}).mappings().first()
 
         if not row:
-            # Fallback query if no record match
-            query = text("""
-                SELECT p.id as prediction_id, p.prediction_status, p.model_version, p.triggered_by, p.created_at,
-                       p.repository_id, p.failure_probability, p.risk_score, p.risk_level, p.confidence, p.health_score,
-                       p.feature_importance_json, p.recommendations_json,
-                       r.repository_name, r.repository_url, r.organization, r.language, r.git_provider, r.branch, r.visibility, r.owner
-                FROM repository_predictions p
-                LEFT JOIN repositories r ON p.repository_id = r.id
-                ORDER BY p.created_at DESC
-            """)
-            row = db.execute(query).mappings().first()
-
-        if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Prediction data not found for ID: {prediction_id or project_id}")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Prediction analysis data not found for requested ID: {prediction_id or project_id}")
 
         res = dict(row)
         

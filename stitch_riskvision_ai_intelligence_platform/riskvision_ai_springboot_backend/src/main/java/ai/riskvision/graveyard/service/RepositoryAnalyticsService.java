@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -67,7 +68,7 @@ public class RepositoryAnalyticsService {
      * Per-user statistics — scoped strictly to repositories owned by the given user.
      * Returns zeroed stats when the user has no repositories (e.g. GitHub not connected).
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public RepositoryStatisticsResponse computeStatisticsForUser(String identifier) {
         if (identifier == null || identifier.isBlank()) {
             return emptyStats();
@@ -82,31 +83,68 @@ public class RepositoryAnalyticsService {
                         return Optional.empty();
                     }
                 });
-        if (userOpt.isEmpty()) return emptyStats();
 
-        UUID userId = userOpt.get().getId();
-        long total = repoRepository.countByUserId(userId);
-        if (total == 0) return emptyStats();
-
-        long active = repoRepository.countByUserIdAndStatus(userId, "ACTIVE");
-        long archived = repoRepository.countByUserIdAndStatus(userId, "ARCHIVED");
-        long healthy = repoRepository.countHealthyByUserId(userId);
-        long underObservation = repoRepository.countUnderObservationByUserId(userId);
-        long highRisk = repoRepository.countByUserIdAndRiskLevelIgnoreCase(userId, "HIGH")
-                      + repoRepository.countByUserIdAndRiskLevelIgnoreCase(userId, "CRITICAL");
-        long predictedDead = repoRepository.countPredictedDeadByUserId(userId);
-        long withPredictions = repoRepository.countByUserIdWithPredictions(userId);
-
-        Double avgFailProb = repoRepository.avgFailureProbabilityByUserId(userId);
-        if (avgFailProb == null) avgFailProb = 0.0;
-
-        Double avgHealth = repoRepository.avgHealthScoreByUserId(userId);
-        if (avgHealth == null || avgHealth == 0.0) {
-            avgHealth = Math.max(0.0, (1.0 - avgFailProb) * 100.0);
+        List<ai.riskvision.graveyard.entity.RepositoryEntity> allUserRepos;
+        if (userOpt.isPresent()) {
+            UUID userId = userOpt.get().getId();
+            allUserRepos = new java.util.ArrayList<>(repoRepository.findAllByUserWithFilters(
+                    userId, null, null, null, null, null, null, null,
+                    org.springframework.data.domain.PageRequest.of(0, 1000)).getContent());
+        } else {
+            return emptyStats();
         }
 
+        long total = allUserRepos.size();
+        if (total == 0) return emptyStats();
+
+        long active = allUserRepos.stream().filter(r -> "ACTIVE".equalsIgnoreCase(r.getStatus())).count();
+        long archived = allUserRepos.stream().filter(r -> "ARCHIVED".equalsIgnoreCase(r.getStatus())).count();
+
+        long healthy = 0;
+        long underObservation = 0;
+        long highRisk = 0;
+        long predictedDead = 0;
+        long withPredictions = 0;
+        long pendingPrediction = 0;
+        double sumHealth = 0.0;
+        double sumFailProb = 0.0;
+
+        for (ai.riskvision.graveyard.entity.RepositoryEntity r : allUserRepos) {
+            boolean isArchived = "ARCHIVED".equalsIgnoreCase(r.getStatus());
+            if (isArchived) continue;
+
+            boolean hasPred = ("COMPLETED".equalsIgnoreCase(r.getPredictionStatus()))
+                    || (r.getFailureProbability() != null)
+                    || (r.getHealthScore() != null && r.getHealthScore() > 0.0);
+
+            if (hasPred) {
+                withPredictions++;
+
+                double failProb = r.getFailureProbability() != null ? r.getFailureProbability() : 0.0;
+                double health = r.getHealthScore() != null && r.getHealthScore() > 0.0 ? r.getHealthScore() : Math.max(0.0, (1.0 - failProb) * 100.0);
+
+                sumHealth += health;
+                sumFailProb += failProb;
+
+                String rl = r.getRiskLevel() != null ? r.getRiskLevel().toUpperCase() : "";
+                if (rl.equals("LOW") || (rl.isEmpty() && failProb < 0.25)) {
+                    healthy++;
+                } else if (rl.equals("MEDIUM") || (rl.isEmpty() && failProb < 0.50)) {
+                    underObservation++;
+                } else if (rl.equals("HIGH") || (rl.isEmpty() && failProb < 0.75)) {
+                    highRisk++;
+                } else {
+                    predictedDead++;
+                }
+            } else {
+                pendingPrediction++;
+            }
+        }
+
+        double avgHealth = withPredictions > 0 ? sumHealth / withPredictions : 0.0;
+        double avgFailProb = withPredictions > 0 ? sumFailProb / withPredictions : 0.0;
         double aiCoverage = total > 0 ? ((double) withPredictions / total) * 100.0 : 0.0;
-        long totalPredictions = predictionRepository.countByUserId(userId);
+        long totalPredictions = predictionRepository.count();
 
         String lastSyncTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
@@ -118,7 +156,7 @@ public class RepositoryAnalyticsService {
                 .predictedDead(predictedDead)
                 .archived(archived)
                 .active(active)
-                .pendingPrediction(total - withPredictions)
+                .pendingPrediction(pendingPrediction)
                 .aiCoveragePercent(Math.round(aiCoverage * 10.0) / 10.0)
                 .avgHealthScore(Math.round(avgHealth * 10.0) / 10.0)
                 .avgFailureProbability(Math.round(avgFailProb * 1000.0) / 1000.0)

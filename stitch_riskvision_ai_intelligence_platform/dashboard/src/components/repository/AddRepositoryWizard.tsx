@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { X, Check, Loader2, Key, Settings } from 'lucide-react';
 import { useCreateRepository, useValidateToken } from '../../hooks/useRepository';
 import type { RepositoryCreateRequest, GitProvider, Visibility, PredictionFrequency } from '../../types/repository';
@@ -89,12 +89,12 @@ export const AddRepositoryWizard: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-      <div className="relative w-full max-w-2xl bg-cyber-950 border border-glass-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="glass-panel w-full max-w-2xl max-h-[90vh] flex flex-col my-auto border border-glass-border shadow-2xl rounded-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-glass-border bg-cyber-900/40">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-glass-border bg-cyber-900/40">
           <div>
-            <h3 className="text-sm font-mono font-bold text-slate-100 uppercase tracking-wider">
+            <h3 className="text-xs sm:text-sm font-mono font-bold text-slate-100 uppercase tracking-wider">
               Register Repository Wizard
             </h3>
             <p className="text-[10px] text-slate-500 font-mono mt-0.5">
@@ -103,14 +103,14 @@ export const AddRepositoryWizard: React.FC<Props> = ({ isOpen, onClose }) => {
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-cyber-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-cyber-800 transition-all cursor-pointer"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* Steps navigation indicator */}
-        <div className="grid grid-cols-4 border-b border-glass-border bg-cyber-900/20 text-center py-3 text-[10px] font-mono">
+        <div className="grid grid-cols-4 border-b border-glass-border bg-cyber-900/20 text-center py-2.5 text-[10px] font-mono px-2">
           {[
             { label: 'Basic Info', num: 1 },
             { label: 'Connection', num: 2 },
@@ -138,7 +138,7 @@ export const AddRepositoryWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               >
                 {step > s.num ? '✓' : s.num}
               </div>
-              <span className="uppercase tracking-widest">{s.label}</span>
+              <span className="uppercase tracking-widest hidden sm:block">{s.label}</span>
             </div>
           ))}
         </div>

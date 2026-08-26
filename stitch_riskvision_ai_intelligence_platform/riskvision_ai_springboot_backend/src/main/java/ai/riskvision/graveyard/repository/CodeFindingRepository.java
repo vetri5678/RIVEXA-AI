@@ -26,4 +26,7 @@ public interface CodeFindingRepository extends JpaRepository<CodeFindingEntity, 
 
     long countByFileAnalysisId(UUID fileAnalysisId);
     long countByAnalysisRunId(UUID analysisRunId);
+
+    @Query("SELECT f FROM CodeFindingEntity f WHERE f.analysisRunId IN (SELECT r.id FROM CodeAnalysisRunEntity r WHERE r.userId = :userId) AND (:search IS NULL OR :search = '' OR LOWER(f.title) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(f.findingType) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(f.symbolName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<CodeFindingEntity> searchUserFindings(@Param("userId") UUID userId, @Param("search") String search, Pageable pageable);
 }

@@ -252,10 +252,22 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                 UserEntity resolvedUser = null;
 
                 // 1. Resolve Initiating User (Logged-in user connecting GitHub)
-                String initRaw = ai.riskvision.graveyard.util.CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.INITIATING_USER_COOKIE_NAME)
-                        .map(jakarta.servlet.http.Cookie::getValue).orElse(null);
-                if (initRaw == null || initRaw.trim().isEmpty()) {
-                    initRaw = request.getParameter("user_email");
+                String initRaw = null;
+                if ("github".equals(provider)) {
+                    initRaw = ai.riskvision.graveyard.util.CookieUtils.getCookie(request, HttpCookieOAuth2AuthorizationRequestRepository.INITIATING_USER_COOKIE_NAME)
+                            .map(jakarta.servlet.http.Cookie::getValue).orElse(null);
+                    if (initRaw == null || initRaw.trim().isEmpty()) {
+                        initRaw = request.getParameter("user_email");
+                    }
+                    if (initRaw == null || initRaw.trim().isEmpty()) {
+                        initRaw = request.getParameter("email");
+                    }
+                    if (initRaw == null || initRaw.trim().isEmpty()) {
+                        initRaw = request.getParameter("user");
+                    }
+                    if ((initRaw == null || initRaw.trim().isEmpty()) && request.getUserPrincipal() != null) {
+                        initRaw = request.getUserPrincipal().getName();
+                    }
                 }
                 final String initiatingUserStr = initRaw;
 
@@ -393,12 +405,16 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             });
 
             if ("github".equals(provider) && user != null && finalAccessToken != null && repositorySyncService != null) {
-                try {
-                    log.info("[GITHUB-OAUTH] Triggering background repository sync for user email={}", user.getEmail());
-                    repositorySyncService.syncUserGitHubRepositories(user, finalAccessToken);
-                } catch (Exception syncEx) {
-                    log.warn("[GITHUB-OAUTH] Auto repo sync after login encountered error: {}", syncEx.getMessage());
-                }
+                final UserEntity syncUser = user;
+                final String syncToken = finalAccessToken;
+                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try {
+                        log.info("[GITHUB-OAUTH] Triggering background repository sync for user email={}", syncUser.getEmail());
+                        repositorySyncService.syncUserGitHubRepositories(syncUser, syncToken);
+                    } catch (Exception syncEx) {
+                        log.warn("[GITHUB-OAUTH] Auto repo sync after login encountered error: {}", syncEx.getMessage());
+                    }
+                });
             }
 
             // Remove the authorized client from Spring's in-memory store after we've
@@ -518,6 +534,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
 
             log.info("[STAGE 9: REDIRECT_TO_FRONTEND_CALLBACK] Redirecting authenticated user to frontend callback target: {}", targetUrl);
             httpCookieOAuth2AuthorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+            httpCookieOAuth2AuthorizationRequestRepository.removeInitiatingUserCookie(request, response);
             if (!response.isCommitted()) {
                 response.sendRedirect(targetUrl);
             }

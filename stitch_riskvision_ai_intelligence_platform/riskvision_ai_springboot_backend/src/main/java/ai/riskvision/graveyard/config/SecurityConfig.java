@@ -36,6 +36,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final SpaLoginFilter spaLoginFilter;
     private final CustomOAuth2SuccessHandler customOAuth2SuccessHandler;
     private final CustomOAuth2FailureHandler customOAuth2FailureHandler;
     private final HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
@@ -123,6 +124,7 @@ public class SecurityConfig {
                     "/oauth2/**",
                     // Health check (public for load balancers)
                     "/api/v1/health",
+                    "/api/v1/dashboard/system-status",
                     "/api/github/health",
                     "/api/v1/github/health",
                     // Pipeline (internal ML service)
@@ -183,8 +185,9 @@ public class SecurityConfig {
                 .successHandler(customOAuth2SuccessHandler)
                 .failureHandler(customOAuth2FailureHandler))
 
-            // ── JWT Filter ───────────────────────────────────────────────────
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            // ── JWT & SPA Filters ─────────────────────────────────────────────
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(spaLoginFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

@@ -17,7 +17,7 @@ public interface CodeFileAnalysisRepository extends JpaRepository<CodeFileAnalys
     List<CodeFileAnalysisEntity> findByAnalysisRunId(UUID analysisRunId);
     Page<CodeFileAnalysisEntity> findByAnalysisRunId(UUID analysisRunId, Pageable pageable);
 
-    @Query("SELECT f FROM CodeFileAnalysisEntity f WHERE f.analysisRunId = :runId AND (:severity IS NULL OR f.severity = :severity) AND (:language IS NULL OR f.language = :language) AND (:search IS NULL OR LOWER(f.filePath) LIKE LOWER(CONCAT('%', :search, '%')))")
+    @Query("SELECT f FROM CodeFileAnalysisEntity f WHERE f.analysisRunId = :runId AND (:severity IS NULL OR f.severity = :severity) AND (:language IS NULL OR f.language = :language) AND (:search IS NULL OR :search = '' OR LOWER(CAST(f.filePath AS string)) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
     Page<CodeFileAnalysisEntity> findByRunIdWithFilters(
             @Param("runId") UUID runId,
             @Param("severity") String severity,
@@ -30,4 +30,7 @@ public interface CodeFileAnalysisRepository extends JpaRepository<CodeFileAnalys
 
     @Query("SELECT COUNT(f) FROM CodeFileAnalysisEntity f WHERE f.analysisRunId = :runId AND f.severity = :severity")
     long countByAnalysisRunIdAndSeverity(@Param("runId") UUID runId, @Param("severity") String severity);
+
+    @Query("SELECT f FROM CodeFileAnalysisEntity f WHERE f.repositoryId IN (SELECT r.id FROM RepositoryEntity r WHERE r.user.id = :userId) AND (:search IS NULL OR :search = '' OR LOWER(f.filePath) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(f.language) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<CodeFileAnalysisEntity> searchUserFiles(@Param("userId") UUID userId, @Param("search") String search, Pageable pageable);
 }

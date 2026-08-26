@@ -37,13 +37,18 @@ class PredictionResult:
     """Complete prediction output for a single project."""
     project_id: str = ""
     failure_probability: float = 0.0
-    risk_score: int = 0
+    failure_probability_percent: float = 0.0
+    risk_score: float = 0.0
+    health_score: float = 100.0
     risk_category: str = ""
     confidence_level: float = 0.0
     prediction_label: str = ""
+    model_version: str = "xgboost-v2.4"
+    feature_hash: str = ""
     raw_features: dict = None
     processed_features: dict = None
     predicted_at: str = ""
+
 
 
 # =============================================================================
@@ -255,41 +260,48 @@ class PredictionEngineStage(PipelineStage):
 
         return pred, prob
 
-    def _calculate_risk_score(self, probability: float) -> int:
-        """Convert failure probability to a 0–100 risk score."""
-        return max(0, min(100, int(probability * 100)))
+    def _calculate_risk_score(self, probability: float) -> float:
+        """Convert failure probability to a 0.0–100.0 risk score."""
+        return round(float(np.clip(probability * 100.0, 0.0, 100.0)), 1)
 
-    def _categorize_risk(self, score: int) -> str:
+    def _calculate_health_score(self, risk_score: float) -> float:
+        """Calculate health score as 100 - risk_score."""
+        return round(float(np.clip(100.0 - risk_score, 0.0, 100.0)), 1)
+
+    def _categorize_risk(self, score: float) -> str:
         """Map risk score to a category."""
-        if score <= 25:
+        if score <= 25.0:
             return "LOW"
-        elif score <= 50:
+        elif score <= 50.0:
             return "MEDIUM"
-        elif score <= 75:
+        elif score <= 75.0:
             return "HIGH"
         else:
             return "CRITICAL"
 
     def _calculate_confidence(self, probability: float) -> float:
         """
-        Confidence = how far the probability is from the decision boundary (0.5).
-        Result is in [0.0, 1.0].
+        AI Confidence (Option A - Probability Margin):
+        confidence_percent = abs(prob_positive - prob_negative) * 100
+        Result is in percentage [0.0, 100.0].
         """
-        return round(abs(probability - 0.5) * 2, 4)
+        prob_pos = probability
+        prob_neg = 1.0 - probability
+        return round(abs(prob_pos - prob_neg) * 100.0, 1)
 
     # ------------------------------------------------------------------
     # Main processing
     # ------------------------------------------------------------------
 
     def process(self, payload: StagePayload) -> StagePayload:
-        """Execute Stage 10: preprocess → predict → score → categorise."""
+        """Execute Stage 10: preprocess → validate → predict → score → categorise."""
         model = payload.artifacts["best_model"]
         transformer = payload.artifacts["transformer_artifacts"]
         raw_input = payload.metadata["prediction_input"]
 
         # Resolve exact feature names the model expects (no target col)
         feature_names = self._resolve_feature_names(model, transformer)
-        self.logger.info("Prediction using %d features: %s...", len(feature_names), feature_names[:5])
+        self.logger.info("[PREDICTION START] project_id=%s features_expected=%d", raw_input.get("project_id", "unknown"), len(feature_names))
 
         # Store raw features for the report
         raw_features = dict(raw_input) if isinstance(raw_input, dict) else {}
@@ -299,6 +311,14 @@ class PredictionEngineStage(PipelineStage):
             raw_input, transformer, feature_names,
         )
 
+        # Validate feature vector against NaN / Inf
+        if features_df.isnull().values.any() or np.isinf(features_df.values).any():
+            raise FeatureMismatchError(
+                feature_name="feature_vector",
+                expected_type="finite float",
+                actual_type="NaN or Inf detected",
+            )
+
         import hashlib
         import json
         canonical_features = {
@@ -306,35 +326,47 @@ class PredictionEngineStage(PipelineStage):
             for col in sorted(features_df.columns)
         }
         feature_str = json.dumps(canonical_features, sort_keys=True)
-        feature_fingerprint = hashlib.sha256(feature_str.encode("utf-8")).hexdigest()[:16]
+        feature_fingerprint = hashlib.sha256(feature_str.encode("utf-8")).hexdigest()
 
         self.logger.info(
-            "[PREDICTION] project_id=%s featureFingerprint=%s features=%s",
+            "[FEATURE EXTRACTION] project_id=%s feature_count=%d feature_hash=%s",
             raw_input.get("project_id", "unknown"),
-            feature_fingerprint,
-            canonical_features
+            len(features_df.columns),
+            feature_fingerprint
         )
         payload.metadata["feature_fingerprint"] = feature_fingerprint
 
         # 2. Predict
         pred_label, failure_prob = self._predict(model, features_df)
-        self.logger.info(
-            "Prediction: label=%d, failure_prob=%.4f", pred_label, failure_prob,
-        )
+        failure_prob_pct = round(failure_prob * 100.0, 2)
 
-        # 3. Risk scoring
+        # 3. Canonical Risk & Health scoring
         risk_score = self._calculate_risk_score(failure_prob)
+        health_score = self._calculate_health_score(risk_score)
         risk_category = self._categorize_risk(risk_score)
         confidence = self._calculate_confidence(failure_prob)
+
+        self.logger.info(
+            "[MODEL INFERENCE] raw_probability=%.4f risk_score=%.1f health_score=%.1f confidence=%.1f%% risk_category=%s",
+            failure_prob, risk_score, health_score, confidence, risk_category
+        )
+
+        model_ver = getattr(model, "model_version", "xgboost-v2.4")
+        if hasattr(payload.artifacts.get("best_model"), "metadata"):
+            model_ver = payload.artifacts["best_model"].metadata.get("model_version", model_ver)
 
         # 4. Build result
         result = PredictionResult(
             project_id=raw_input.get("project_id", "unknown"),
             failure_probability=round(failure_prob, 4),
+            failure_probability_percent=failure_prob_pct,
             risk_score=risk_score,
+            health_score=health_score,
             risk_category=risk_category,
             confidence_level=confidence,
             prediction_label="FAILED" if pred_label == 1 else "SURVIVED",
+            model_version="xgboost-v2.4",
+            feature_hash=feature_fingerprint,
             raw_features=raw_features,
             processed_features={
                 col: round(float(features_df[col].iloc[0]), 4)
@@ -348,14 +380,20 @@ class PredictionEngineStage(PipelineStage):
         payload.artifacts["prediction_features"] = features_df
         payload.metadata["prediction"] = {
             "project_id": result.project_id,
+            "failure_probability": result.failure_probability,
+            "failure_probability_percent": result.failure_probability_percent,
             "risk_score": result.risk_score,
+            "health_score": result.health_score,
             "risk_category": result.risk_category,
             "confidence": result.confidence_level,
             "label": result.prediction_label,
+            "feature_hash": result.feature_hash,
+            "model_version": result.model_version,
         }
 
         self.logger.info(
-            "PredictionEngine complete — project=%s, risk=%s (%d%%), confidence=%.2f.",
-            result.project_id, result.risk_category, result.risk_score, confidence,
+            "[PREDICTION COMPLETE] project_id=%s risk=%s (risk_score=%.1f, health_score=%.1f), confidence=%.1f%%, feature_hash=%s",
+            result.project_id, result.risk_category, result.risk_score, result.health_score, confidence, result.feature_hash
         )
         return payload
+

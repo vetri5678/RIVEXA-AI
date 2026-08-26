@@ -360,6 +360,17 @@ export const RepositoryDetailsDrawer: React.FC<Props> = ({ repositoryId, onClose
 
   const isOpen = !!repositoryId;
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   return (
     <>
       {/* Backdrop */}
@@ -369,7 +380,7 @@ export const RepositoryDetailsDrawer: React.FC<Props> = ({ repositoryId, onClose
       />
 
       {/* Drawer */}
-      <div className={`fixed right-0 top-0 h-screen w-[640px] max-w-full bg-cyber-950 border-l border-glass-border z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed right-0 top-0 h-screen w-full sm:w-[540px] md:w-[640px] max-w-full bg-cyber-950 border-l border-glass-border z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-glass-border bg-cyber-900/40">

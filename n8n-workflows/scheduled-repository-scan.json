@@ -1,0 +1,70 @@
+{
+  "name": "RIVEXA — Scheduled Repository Health Scan",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "name": "Cron Trigger (Every 6 Hours)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://springboot-backend:8080/api/v1/repositories/sync-all",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Invoke RIVEXA Batch Sync API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        340,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Cron Trigger (Every 6 Hours)": {
+      "main": [
+        [
+          {
+            "node": "Invoke RIVEXA Batch Sync API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "id": "rivexa-scheduled-repo-scan-workflow",
+  "tags": [
+    {
+      "name": "RIVEXA"
+    },
+    {
+      "name": "Cron"
+    },
+    {
+      "name": "Scan"
+    }
+  ]
+}

@@ -8,39 +8,50 @@ import type {
 
 import { githubApi } from '../api/githubApi';
 
-const getCurrentUserId = (): string | null => {
+const getCurrentUserId = (): string => {
   try {
-    const raw = localStorage.getItem('rv_user');
+    const raw = localStorage.getItem('rv_user') || localStorage.getItem('rivexa_user') || localStorage.getItem('user');
     if (raw) {
       const parsed = JSON.parse(raw);
-      return parsed.id || parsed.user_id || parsed.email || null;
+      if (parsed?.id || parsed?.user_id || parsed?.email) {
+        return String(parsed.id || parsed.user_id || parsed.email);
+      }
+    }
+    const token = localStorage.getItem('rv_access_token') || localStorage.getItem('access_token');
+    if (token && token.includes('.')) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload?.userId || payload?.id || payload?.sub) {
+        return String(payload.userId || payload.id || payload.sub);
+      }
     }
   } catch {}
-  return null;
+  return 'unauthenticated';
 };
 
 // ─── Query Keys ──────────────────────────────────────────────────────────────
 
 export const REPO_KEYS = {
-  all: ['repositories'] as const,
-  lists: () => [...REPO_KEYS.all, 'list'] as const,
-  list: (filters: Partial<RepositoryFilters>) => [...REPO_KEYS.lists(), filters] as const,
-  connectionStatus: (userId?: string | null) => ['github-connection-status', userId || 'anonymous'] as const,
-  githubUserRepos: (userId?: string | null) => ['github-repositories', userId || 'anonymous'] as const,
-  statistics: () => [...REPO_KEYS.all, 'statistics'] as const,
-  details: () => [...REPO_KEYS.all, 'detail'] as const,
-  detail: (id: string) => [...REPO_KEYS.details(), id] as const,
-  metrics: (id: string) => [...REPO_KEYS.all, 'metrics', id] as const,
-  history: (id: string) => [...REPO_KEYS.all, 'history', id] as const,
+  all: (userId?: string | null) => ['repositories', userId || 'unauthenticated'] as const,
+  lists: (userId?: string | null) => [...REPO_KEYS.all(userId), 'list'] as const,
+  list: (filters: Partial<RepositoryFilters>, userId?: string | null) => [...REPO_KEYS.lists(userId), filters] as const,
+  connectionStatus: (userId?: string | null) => ['github-connection-status', userId || 'unauthenticated'] as const,
+  githubUserRepos: (userId?: string | null) => ['github-repositories', userId || 'unauthenticated'] as const,
+  statistics: (userId?: string | null) => [...REPO_KEYS.all(userId), 'statistics'] as const,
+  details: (userId?: string | null) => [...REPO_KEYS.all(userId), 'detail'] as const,
+  detail: (id: string, userId?: string | null) => [...REPO_KEYS.details(userId), id] as const,
+  metrics: (id: string, userId?: string | null) => [...REPO_KEYS.all(userId), 'metrics', id] as const,
+  history: (id: string, userId?: string | null) => [...REPO_KEYS.all(userId), 'history', id] as const,
 };
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 export const useRepositories = (filters: Partial<RepositoryFilters> = {}) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: REPO_KEYS.list(filters),
+    queryKey: REPO_KEYS.list(filters, userId),
     queryFn: () => repositoryApi.getAll(filters),
     placeholderData: keepPreviousData,
+    enabled: userId !== 'unauthenticated',
   });
 };
 
@@ -74,71 +85,95 @@ export const useDisconnectGithub = () => {
   const userId = getCurrentUserId();
   return useMutation({
     mutationFn: githubApi.disconnectAccount,
-    onSuccess: () => {
-      // 1. Immediately update connection status caches to false
-      queryClient.setQueriesData({ queryKey: REPO_KEYS.connectionStatus(userId) }, { connected: false });
-      queryClient.setQueriesData({ queryKey: ['github-connection-status'] }, { connected: false });
-      queryClient.setQueriesData({ queryKey: ['github-connection'] }, { connected: false });
+    onMutate: async () => {
+      // 1. Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: REPO_KEYS.connectionStatus(userId) });
+      await queryClient.cancelQueries({ queryKey: ['github-connection-status'] });
+
+      // 2. Snapshot the previous connection status for rollback if request fails
+      const previousStatus = queryClient.getQueryData(REPO_KEYS.connectionStatus(userId));
+
+      // 3. Optimistically update local query caches immediately
+      const disconnectedState = { connected: false, status: 'DISCONNECTED', githubUser: null, repositoryCount: 0 };
+      queryClient.setQueryData(REPO_KEYS.connectionStatus(userId), disconnectedState);
+      queryClient.setQueriesData({ queryKey: ['github-connection-status'] }, disconnectedState);
+      queryClient.setQueriesData({ queryKey: ['github-connection'] }, disconnectedState);
       queryClient.setQueriesData({ queryKey: REPO_KEYS.githubUserRepos(userId) }, { connected: false, repositories: [] });
       queryClient.setQueriesData({ queryKey: ['github-repositories'] }, { connected: false, repositories: [] });
 
-      // 2. Remove and invalidate connection and repository queries
+      return { previousStatus };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback to previous connection state on error
+      if (context?.previousStatus) {
+        queryClient.setQueryData(REPO_KEYS.connectionStatus(userId), context.previousStatus);
+        queryClient.setQueriesData({ queryKey: ['github-connection-status'] }, context.previousStatus);
+      }
+    },
+    onSuccess: () => {
+      // 1. Confirm connection status and overview caches as disconnected
+      const disconnectedState = { connected: false, status: 'DISCONNECTED', githubUser: null, repositoryCount: 0 };
+      queryClient.setQueryData(REPO_KEYS.connectionStatus(userId), disconnectedState);
+      queryClient.setQueriesData({ queryKey: ['github-connection-status'] }, disconnectedState);
+      queryClient.setQueriesData({ queryKey: ['github-connection'] }, disconnectedState);
+      queryClient.setQueriesData({ queryKey: REPO_KEYS.githubUserRepos(userId) }, { connected: false, repositories: [] });
+      queryClient.setQueriesData({ queryKey: ['github-repositories'] }, { connected: false, repositories: [] });
+
+      // 2. Remove repository queries
       queryClient.removeQueries({ queryKey: ['github-repositories'] });
       queryClient.removeQueries({ queryKey: REPO_KEYS.githubUserRepos(userId) });
-      queryClient.invalidateQueries({ queryKey: ['github-connection-status'] });
-      queryClient.invalidateQueries({ queryKey: ['github-repositories'] });
-      queryClient.invalidateQueries({ queryKey: ['repositories'] });
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
 
-      // 3. Invalidate dashboard statistics & telemetry queries
+      // 3. Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ['github-connection-status'] });
+      queryClient.invalidateQueries({ queryKey: ['repositories'] });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
       queryClient.invalidateQueries({ queryKey: ['overview'] });
       queryClient.invalidateQueries({ queryKey: ['graveyard-index'] });
       queryClient.invalidateQueries({ queryKey: ['org-health'] });
       queryClient.invalidateQueries({ queryKey: ['risk-distribution'] });
       queryClient.invalidateQueries({ queryKey: ['prediction-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['repository-ranking'] });
       queryClient.invalidateQueries({ queryKey: ['high-risk-projects'] });
-      queryClient.invalidateQueries({ queryKey: ['recommendations'] });
-      queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
-      queryClient.invalidateQueries({ queryKey: ['forecast'] });
-      queryClient.invalidateQueries({ queryKey: ['executive-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['ai-insights'] });
-      queryClient.invalidateQueries({ queryKey: ['project-lifecycle-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['risk-heatmap'] });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['github-connection-status'] });
     },
   });
 };
 
 export const useRepositoryStatistics = () => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: REPO_KEYS.statistics(),
+    queryKey: REPO_KEYS.statistics(userId),
     queryFn: repositoryApi.getStatistics,
     refetchInterval: 30000, // Refresh KPIs every 30s
+    enabled: userId !== 'unauthenticated',
   });
 };
 
 export const useRepositoryById = (id: string | null) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: REPO_KEYS.detail(id!),
+    queryKey: REPO_KEYS.detail(id!, userId),
     queryFn: () => repositoryApi.getById(id!),
-    enabled: !!id,
+    enabled: !!id && userId !== 'unauthenticated',
   });
 };
 
 export const useRepositoryMetrics = (id: string | null) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: REPO_KEYS.metrics(id!),
+    queryKey: REPO_KEYS.metrics(id!, userId),
     queryFn: () => repositoryApi.getMetrics(id!),
-    enabled: !!id,
+    enabled: !!id && userId !== 'unauthenticated',
   });
 };
 
 export const useRepositoryHistory = (id: string | null) => {
+  const userId = getCurrentUserId();
   return useQuery({
-    queryKey: REPO_KEYS.history(id!),
+    queryKey: REPO_KEYS.history(id!, userId),
     queryFn: () => repositoryApi.getHistory(id!),
-    enabled: !!id,
+    enabled: !!id && userId !== 'unauthenticated',
   });
 };
 
@@ -149,7 +184,7 @@ export const useCreateRepository = () => {
   return useMutation({
     mutationFn: (request: RepositoryCreateRequest) => repositoryApi.create(request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
     },
   });
 };
@@ -160,7 +195,7 @@ export const useUpdateRepository = () => {
     mutationFn: ({ id, request }: { id: string; request: RepositoryUpdateRequest }) =>
       repositoryApi.update(id, request),
     onSuccess: (_data, { id }) => {
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
       queryClient.invalidateQueries({ queryKey: REPO_KEYS.detail(id) });
     },
   });
@@ -171,7 +206,7 @@ export const useDeleteRepository = () => {
   return useMutation({
     mutationFn: (id: string) => repositoryApi.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
     },
   });
 };
@@ -181,7 +216,7 @@ export const useArchiveRepository = () => {
   return useMutation({
     mutationFn: (id: string) => repositoryApi.archive(id),
     onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
       queryClient.invalidateQueries({ queryKey: REPO_KEYS.detail(id) });
     },
   });
@@ -192,7 +227,7 @@ export const useRestoreRepository = () => {
   return useMutation({
     mutationFn: (id: string) => repositoryApi.restore(id),
     onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
       queryClient.invalidateQueries({ queryKey: REPO_KEYS.detail(id) });
     },
   });
@@ -203,7 +238,7 @@ export const useDuplicateRepository = () => {
   return useMutation({
     mutationFn: (id: string) => repositoryApi.duplicate(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
     },
   });
 };
@@ -224,7 +259,7 @@ export const usePredictRepository = () => {
   return useMutation({
     mutationFn: (id: string) => repositoryApi.predict(id),
     onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: REPO_KEYS.all() });
       queryClient.invalidateQueries({ queryKey: REPO_KEYS.detail(id) });
       queryClient.invalidateQueries({ queryKey: REPO_KEYS.history(id) });
     },
@@ -240,8 +275,8 @@ export const useValidateToken = () => {
 
 export const useExportRepositories = () => {
   return useMutation({
-    mutationFn: ({ status, riskLevel }: { status?: string; riskLevel?: string }) =>
-      repositoryApi.exportAll(status, riskLevel),
+    mutationFn: (filters?: Partial<RepositoryFilters>) =>
+      repositoryApi.exportCsv(filters),
   });
 };
 

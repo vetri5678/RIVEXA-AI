@@ -30,6 +30,9 @@ public class RepositoryEntity {
     @JoinColumn(name = "user_id")
     private UserEntity user;
 
+    @Column(name = "github_repository_id", length = 100)
+    private String githubRepositoryId;
+
     @Column(name = "repository_name", nullable = false, length = 200)
     private String repositoryName;
 
@@ -143,4 +146,8 @@ public class RepositoryEntity {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 }

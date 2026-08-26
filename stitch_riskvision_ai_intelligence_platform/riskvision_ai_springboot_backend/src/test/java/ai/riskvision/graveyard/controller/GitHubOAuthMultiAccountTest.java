@@ -65,8 +65,8 @@ class GitHubOAuthMultiAccountTest {
     }
 
     @Test
-    @DisplayName("Verification: GitHub OAuth authorization request contains prompt=select_account")
-    void testAuthorizationRequest_ContainsPromptSelectAccount() {
+    @DisplayName("Verification: GitHub OAuth authorization request converts select_account to consent")
+    void testAuthorizationRequest_ConvertsSelectAccountToConsent() {
         try {
             if (clientRegistrationRepository != null && clientRegistrationRepository.findByRegistrationId("github") != null) {
                 CustomOAuth2AuthorizationRequestResolver resolver =
@@ -74,11 +74,12 @@ class GitHubOAuthMultiAccountTest {
 
                 MockHttpServletRequest request = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
                 request.setServletPath("/oauth2/authorization/github");
+                request.setParameter("prompt", "select_account");
                 OAuth2AuthorizationRequest authRequest = resolver.resolve(request);
 
                 if (authRequest != null) {
-                    assertEquals("select_account", authRequest.getAdditionalParameters().get("prompt"),
-                            "GitHub OAuth request must include prompt=select_account parameter");
+                    assertEquals("consent", authRequest.getAdditionalParameters().get("prompt"),
+                            "GitHub OAuth request must map select_account to consent");
                 }
             }
         } catch (org.springframework.security.oauth2.core.OAuth2AuthenticationException ex) {

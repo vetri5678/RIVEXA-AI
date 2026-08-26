@@ -5,6 +5,8 @@ import authApi from '../api/auth';
 import { AlertCircle, X, RefreshCw } from 'lucide-react';
 import { RivexaLogo } from '../components/common/RivexaLogo';
 
+import { clearAuthStorageAndCookies } from '../utils/auth';
+
 interface ToastItem {
   id: number;
   message: string;
@@ -170,17 +172,8 @@ export const Login: React.FC = () => {
   const handleOAuth = (provider: 'google' | 'github') => {
     if (oauthLoading) return;
     setError('');
-    // Purge ALL local/session storage tokens from any prior session before starting fresh OAuth flow.
-    // This prevents stale tokens from a previous user leaking into the new OAuth callback.
-    localStorage.removeItem('rv_access_token');
-    localStorage.removeItem('rv_refresh_token');
-    localStorage.removeItem('rv_user');
-    localStorage.removeItem('rivexa_user');
-    localStorage.removeItem('rivexa_token');
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
-    sessionStorage.removeItem('rv_toast_msg');
-    sessionStorage.removeItem('rv_toast_type');
+    // Purge ALL local/session storage tokens and cookies from any prior session before starting fresh OAuth flow.
+    clearAuthStorageAndCookies();
 
     setOAuthLoading(provider);
     pushToast(
@@ -341,7 +334,7 @@ export const Login: React.FC = () => {
             </div>
 
             {/* Social Logins Grid */}
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3.5">
               {/* Google Button */}
               <button
                 type="button"

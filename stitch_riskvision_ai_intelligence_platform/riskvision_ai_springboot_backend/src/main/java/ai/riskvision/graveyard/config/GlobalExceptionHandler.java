@@ -129,6 +129,9 @@ public class GlobalExceptionHandler {
             Throwable ex, WebRequest request) {
         log.error("Unhandled exception or error: ", ex);
         String msg = ex.getMessage() != null ? ex.getMessage() : "An unexpected server error occurred.";
+        if (msg.contains("update repositories") || msg.contains("could not execute statement") || msg.contains("I/O error")) {
+            msg = "A temporary database connection error occurred. Please try again.";
+        }
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, msg, request);
     }
 

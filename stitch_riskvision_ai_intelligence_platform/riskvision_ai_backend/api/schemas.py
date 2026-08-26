@@ -1,4 +1,4 @@
-﻿"""
+"""
 RIVEXA — API Request & Response Schemas
 
 Defines the Pydantic schemas for the REST API endpoints,
@@ -143,9 +143,12 @@ class PredictionResponse(BaseModel):
     project_id: str
     prediction_label: str
     failure_probability: float
-    risk_score: int
+    failure_probability_percent: Optional[float] = 0.0
+    risk_score: float
+    health_score: Optional[float] = 100.0
     risk_category: str
     confidence_level: float
+    confidence: Optional[float] = 0.0
     human_explanation: str
     top_risk_factors: List[Any]
     recommended_actions: List[RecommendationSchema]
@@ -156,6 +159,8 @@ class PredictionResponse(BaseModel):
     model_name: Optional[str] = "XGBClassifier"
     model_type: Optional[str] = "XGBoost"
     feature_fingerprint: Optional[str] = None
+    feature_hash: Optional[str] = None
+
 
 
 class BatchPredictionResponse(BaseModel):

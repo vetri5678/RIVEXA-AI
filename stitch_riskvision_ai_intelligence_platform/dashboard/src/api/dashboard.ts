@@ -25,32 +25,32 @@ import type {
 
 export const dashboardApi = {
   getSystemStatus: async (): Promise<SystemStatusResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/system-status');
+    const { data } = await apiClient.get('/dashboard/system-status');
     return data;
   },
 
   getOverview: async (): Promise<DashboardOverviewResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/overview');
+    const { data } = await apiClient.get('/dashboard/overview');
     return data;
   },
 
   getGraveyardIndex: async (): Promise<GraveyardIndexResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/graveyard-index');
+    const { data } = await apiClient.get('/dashboard/graveyard-index');
     return data;
   },
 
   getOrgHealth: async (): Promise<OrgHealthResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/org-health');
+    const { data } = await apiClient.get('/dashboard/org-health');
     return data;
   },
 
   getRiskDistribution: async (): Promise<RiskDistributionResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/risk-distribution');
+    const { data } = await apiClient.get('/dashboard/risk-distribution');
     return data;
   },
 
   getPredictionSummary: async (): Promise<PredictionSummaryResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/prediction-summary');
+    const { data } = await apiClient.get('/dashboard/prediction-summary');
     return data;
   },
 
@@ -62,57 +62,57 @@ export const dashboardApi = {
     sort_by?: string;
     sort_desc?: boolean;
   }): Promise<RepositoryRankingResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/repository-ranking', { params });
+    const { data } = await apiClient.get('/dashboard/repository-ranking', { params });
     return data;
   },
 
   getHighRiskProjects: async (limit = 10): Promise<HighRiskProjectsResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/high-risk-projects', { params: { limit } });
+    const { data } = await apiClient.get('/dashboard/high-risk-projects', { params: { limit } });
     return data;
   },
 
   getFeatureImportance: async (): Promise<FeatureImportanceResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/feature-importance');
+    const { data } = await apiClient.get('/dashboard/feature-importance');
     return data;
   },
 
   getPredictionTimeline: async (granularity = 'daily'): Promise<PredictionTimelineResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/prediction-timeline', { params: { granularity } });
+    const { data } = await apiClient.get('/dashboard/prediction-timeline', { params: { granularity } });
     return data;
   },
 
   getRecommendations: async (): Promise<RecommendationsResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/recommendations');
+    const { data } = await apiClient.get('/dashboard/recommendations');
     return data;
   },
 
   getAlerts: async (): Promise<AlertsResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/alerts');
+    const { data } = await apiClient.get('/dashboard/alerts');
     return data;
   },
 
   getModelInfo: async (): Promise<ModelInfoResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/model-info');
+    const { data } = await apiClient.get('/dashboard/model-info');
     return data;
   },
 
   getActivity: async (limit = 50): Promise<ActivityResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/activity', { params: { limit } });
+    const { data } = await apiClient.get('/dashboard/activity', { params: { limit } });
     return data;
   },
 
   getForecast: async (): Promise<ForecastResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/forecast');
+    const { data } = await apiClient.get('/dashboard/forecast');
     return data;
   },
 
   getExecutiveSummary: async (): Promise<ExecutiveSummaryResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/executive-summary');
+    const { data } = await apiClient.get('/dashboard/executive-summary');
     return data;
   },
 
   getAIInsights: async (limit = 10): Promise<AIInsightsResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/ai-insights', { params: { limit } });
+    const { data } = await apiClient.get('/dashboard/ai-insights', { params: { limit } });
     return data;
   },
 
@@ -132,7 +132,7 @@ export const dashboardApi = {
     if (!payload || !payload.project_id) {
       throw new Error('Repository project_id is required for assessment');
     }
-    const { data } = await mlApiClient.post('/pipeline/predict', payload);
+    const { data } = await mlApiClient.post('/pipeline/predict', payload, { timeout: 180000 });
     return data;
   },
 
@@ -147,7 +147,7 @@ export const dashboardApi = {
     if (!uuidRegex.test(repositoryId.trim())) {
       throw new Error(`Invalid repository UUID format: "${repositoryId}". Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`);
     }
-    const { data } = await apiClient.post(`/repositories/${repositoryId.trim()}/predict`);
+    const { data } = await apiClient.post(`/repositories/${repositoryId.trim()}/predict`, {}, { timeout: 180000 });
     return data;
   },
 
@@ -167,7 +167,7 @@ export const dashboardApi = {
     if (!uuidRegex.test(repositoryId.trim())) {
       throw new Error(`Invalid repository UUID format: "${repositoryId}". Expected: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`);
     }
-    const { data } = await apiClient.post('/predictions/run', { repositoryId: repositoryId.trim() });
+    const { data } = await apiClient.post('/predictions/run', { repositoryId: repositoryId.trim() }, { timeout: 180000 });
     return data;
   },
 
@@ -249,7 +249,7 @@ export const dashboardApi = {
   },
 
   getProjectLifecycleCounts: async (): Promise<ProjectLifecycleCountsResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/project-lifecycle');
+    const { data } = await apiClient.get('/dashboard/project-lifecycle');
     return data;
   },
 
@@ -261,7 +261,7 @@ export const dashboardApi = {
     sort_by?: string;
     sort_desc?: boolean;
   } = {}): Promise<RiskHeatmapResponse> => {
-    const { data } = await mlApiClient.get('/dashboard/risk-heatmap', { params });
+    const { data } = await apiClient.get('/dashboard/risk-heatmap', { params });
     return data;
   },
 

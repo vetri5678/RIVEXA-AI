@@ -4,7 +4,7 @@ import WidgetWrapper from '../Common/WidgetWrapper';
 import AnimatedNumber from '../../common/AnimatedNumber';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
-export const GraveyardIndexWidget: React.FC = () => {
+export const RivexaRiskIndexWidget: React.FC = () => {
   const { data: indexData, isLoading, isError, refetch } = useGraveyardIndex();
 
   const getStrokeDashOffset = (score: number) => {
@@ -14,7 +14,7 @@ export const GraveyardIndexWidget: React.FC = () => {
 
   return (
     <WidgetWrapper
-      title="GRAVEYARD INDEX"
+      title="RIVEXA RISK INDEX"
       subtitle="Primary platform risk metric (Weighted Score 0-100)"
       isLoading={isLoading}
       isError={isError}
@@ -85,4 +85,5 @@ export const GraveyardIndexWidget: React.FC = () => {
     </WidgetWrapper>
   );
 };
-export default GraveyardIndexWidget;
+
+export default RivexaRiskIndexWidget;

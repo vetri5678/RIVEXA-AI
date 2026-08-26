@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import PipelineBreadcrumbs from '../components/common/PipelineBreadcrumbs';
 import PredictionPipelineWidget from '../components/dashboard/PredictionPipeline/PredictionPipelineWidget';
@@ -12,18 +13,128 @@ import {
   RotateCcw,
   ShieldAlert,
 } from 'lucide-react';
-import { useRepositories } from '../hooks/useRepository';
+import { useRepositories, useGithubUserRepositories } from '../hooks/useRepository';
+import { useGitHubUrlPredictionMutation } from '../hooks/useDashboard';
 import {
   useCodeVisionSummary,
   useCodeVisionFiles,
   useStartCodeVisionAnalysis,
+  useStartBatchCodeVisionAnalysis,
   useForceCodeVisionRescan,
 } from '../hooks/useCodeVision';
 import { CodeVisionFileDetailDrawer } from '../components/codevision/CodeVisionFileDetailDrawer';
 
+interface RepositoryOption {
+  id: string;
+  name: string;
+  fullName: string;
+  url: string;
+  gitProvider: string;
+  isGithubOnly?: boolean;
+}
+
+const resolveRepoName = (item: any): { name: string; fullName: string } => {
+  if (!item) return { name: 'Repository', fullName: 'Repository' };
+
+  let rawName = item.repositoryName || item.name;
+  let rawFullName = item.fullName || item.full_name || rawName;
+
+  const isInvalid = (val?: string) => !val || val === '(Unnamed)' || val === 'Unnamed Repository' || val.trim() === '';
+
+  if (isInvalid(rawName) || isInvalid(rawFullName)) {
+    const url = item.repositoryUrl || item.html_url || item.url || '';
+    if (url) {
+      const cleanUrl = url.trim().replace(/\/+$/, '').replace(/\.git$/, '');
+      const parts = cleanUrl.split('/');
+      if (parts.length >= 2) {
+        const owner = parts[parts.length - 2];
+        const repo = parts[parts.length - 1];
+        if (owner && repo && !owner.includes(':') && !owner.includes('.')) {
+          rawFullName = `${owner}/${repo}`;
+          rawName = repo;
+        } else if (repo) {
+          rawName = repo;
+          rawFullName = repo;
+        }
+      } else if (parts.length === 1 && parts[0]) {
+        rawName = parts[0];
+        rawFullName = parts[0];
+      }
+    }
+  }
+
+  if (isInvalid(rawName)) {
+    rawName = item.id ? `Repo-${String(item.id).substring(0, 8)}` : 'Repository';
+  }
+  if (isInvalid(rawFullName)) {
+    rawFullName = rawName;
+  }
+
+  return { name: rawName, fullName: rawFullName };
+};
+
+const parseRepositories = (dbReposResponse: any, ghReposResponse: any): RepositoryOption[] => {
+  const options: RepositoryOption[] = [];
+  const addedIds = new Set<string>();
+
+  // 1. Parse registered database repositories
+  const dbItems = Array.isArray(dbReposResponse)
+    ? dbReposResponse
+    : dbReposResponse?.content || dbReposResponse?.data || dbReposResponse?.repositories || [];
+
+  for (const item of dbItems) {
+    if (item && item.id) {
+      const idStr = String(item.id);
+      const { name, fullName } = resolveRepoName(item);
+      options.push({
+        id: idStr,
+        name,
+        fullName,
+        url: item.repositoryUrl || item.html_url || item.url || '',
+        gitProvider: item.gitProvider || 'GitHub',
+        isGithubOnly: false,
+      });
+      addedIds.add(idStr);
+    }
+  }
+
+  // 2. Parse live GitHub repositories if connected
+  const ghItems = Array.isArray(ghReposResponse)
+    ? ghReposResponse
+    : ghReposResponse?.repositories || ghReposResponse?.data || [];
+
+  for (const item of ghItems) {
+    if (item) {
+      const idStr = String(item.id || item.full_name || item.name);
+      const { name, fullName } = resolveRepoName(item);
+      const url = item.html_url || item.repositoryUrl || item.url || '';
+
+      const alreadyPresent = options.some(
+        (o) => o.id === idStr || (o.url && url && o.url.toLowerCase() === url.toLowerCase())
+      );
+
+      if (!alreadyPresent) {
+        options.push({
+          id: idStr,
+          name,
+          fullName,
+          url,
+          gitProvider: 'GitHub',
+          isGithubOnly: true,
+        });
+      }
+    }
+  }
+
+  return options;
+};
+
 export const CodeVisionAI: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRepoId, setSelectedRepoId] = useState<string>('');
+  const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([]);
+  const [isMultiMode, setIsMultiMode] = useState<boolean>(false);
+  const [isStartingAnalysis, setIsStartingAnalysis] = useState<boolean>(false);
 
   // Table Filters & Pagination
   const [fileSearch, setFileSearch] = useState('');
@@ -36,18 +147,38 @@ export const CodeVisionAI: React.FC = () => {
   // File Drawer State
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
-  // Fetch user's registered repositories
-  const { data: reposData } = useRepositories({ size: 100 });
-  const repos = reposData?.content || [];
+  // Fetch user's registered repositories and live GitHub user repos
+  const { data: reposData, isLoading: reposLoading } = useRepositories({ size: 100 });
+  const { data: githubUserRepos } = useGithubUserRepositories();
 
-  // Auto-select first repository if available
+  const repositories = useMemo(() => {
+    return parseRepositories(reposData, githubUserRepos);
+  }, [reposData, githubUserRepos]);
+
+  // Development debug logging
   useEffect(() => {
-    if (repos.length > 0 && !selectedRepoId) {
-      setSelectedRepoId(repos[0].id);
-    }
-  }, [repos, selectedRepoId]);
+    console.log('[CodeVisionAI] Repositories:', repositories);
+    console.log('[CodeVisionAI] Selected Focus Repo ID:', selectedRepoId);
+    console.log('[CodeVisionAI] Selected Repo IDs:', selectedRepoIds);
+  }, [repositories, selectedRepoId, selectedRepoIds]);
 
-  // Fetch Summary & Job Status
+  // Auto-select first repository when list loads or changes
+  useEffect(() => {
+    if (repositories.length > 0) {
+      const isValid = repositories.some((r) => r.id === selectedRepoId);
+      if (!selectedRepoId || !isValid) {
+        const firstId = repositories[0].id;
+        setSelectedRepoId(firstId);
+        if (selectedRepoIds.length === 0) {
+          setSelectedRepoIds([firstId]);
+        }
+      }
+    }
+  }, [repositories, selectedRepoId, selectedRepoIds.length]);
+
+  const queryClient = useQueryClient();
+
+  // Fetch Summary & Job Status for selected repository
   const { data: summary } = useCodeVisionSummary(selectedRepoId);
   const latestRun = summary?.latestRun;
   const isRunning = latestRun?.status === 'RUNNING' || latestRun?.status === 'QUEUED';
@@ -64,14 +195,163 @@ export const CodeVisionAI: React.FC = () => {
   });
 
   const startAnalysisMutation = useStartCodeVisionAnalysis();
+  const startBatchAnalysisMutation = useStartBatchCodeVisionAnalysis();
   const forceRescanMutation = useForceCodeVisionRescan();
+  const githubUrlMutation = useGitHubUrlPredictionMutation();
 
-  const handleStartAnalysis = (force = false) => {
-    if (!selectedRepoId) return;
-    if (force) {
-      forceRescanMutation.mutate(selectedRepoId);
+  const isUuid = (str: string): boolean => {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  };
+
+  // Reset file detail drawer & table filters when repository selection changes
+  const handleRepoSelect = (repoId: string) => {
+    console.log('[CodeVisionAI] Repository selected:', repoId);
+    if (selectedRepoId && selectedRepoId !== repoId) {
+      queryClient.cancelQueries({ queryKey: ['code-vision-summary', selectedRepoId] });
+      queryClient.removeQueries({ queryKey: ['code-vision-summary', selectedRepoId] });
+      queryClient.cancelQueries({ queryKey: ['code-vision-files', selectedRepoId] });
+      queryClient.removeQueries({ queryKey: ['code-vision-files', selectedRepoId] });
+    }
+    setSelectedRepoId(repoId);
+    setSelectedRepoIds([repoId]);
+    setSelectedFileId(null);
+    setFileSearch('');
+    setSelectedSeverity('');
+    setSelectedLanguage('');
+    setPage(0);
+    queryClient.invalidateQueries({ queryKey: ['code-vision-summary', repoId] });
+    queryClient.invalidateQueries({ queryKey: ['code-vision-files', repoId] });
+  };
+
+  const handleToggleMultiRepo = (repoId: string) => {
+    setSelectedRepoIds((prev) => {
+      let updated: string[];
+      if (prev.includes(repoId)) {
+        updated = prev.filter((id) => id !== repoId);
+      } else {
+        updated = [...prev, repoId];
+      }
+      if (updated.length > 0) {
+        setSelectedRepoId(updated[0]);
+      }
+      return updated;
+    });
+  };
+
+  const handleSelectAllRepos = () => {
+    if (selectedRepoIds.length === repositories.length) {
+      setSelectedRepoIds([]);
     } else {
-      startAnalysisMutation.mutate({ repositoryId: selectedRepoId, force: false });
+      const allIds = repositories.map((r) => r.id);
+      setSelectedRepoIds(allIds);
+      if (allIds.length > 0) setSelectedRepoId(allIds[0]);
+    }
+  };
+
+  // Auto-resolve non-UUID repository IDs (such as raw GitHub repository options) to database UUIDs
+  useEffect(() => {
+    let isSubscribed = true;
+    if (selectedRepoId && !isUuid(selectedRepoId)) {
+      const repoOption = repositories.find((r) => r.id === selectedRepoId);
+      if (repoOption?.url) {
+        console.log('[CodeVisionAI] Auto-resolving non-UUID selectedRepoId to DB entity:', selectedRepoId, repoOption.url);
+        githubUrlMutation
+          .mutateAsync(repoOption.url)
+          .then((res) => {
+            if (isSubscribed && res && res.repositoryId) {
+              console.log('[CodeVisionAI] Successfully auto-resolved repo ID to DB UUID:', res.repositoryId);
+              setSelectedRepoId(res.repositoryId);
+              setSelectedRepoIds([res.repositoryId]);
+            }
+          })
+          .catch((err) => {
+            console.warn('[CodeVisionAI] Failed to auto-resolve repo ID:', err);
+          });
+      }
+    }
+    return () => {
+      isSubscribed = false;
+    };
+  }, [selectedRepoId, repositories]);
+
+  // Auto-start analysis if selected repository has no analysis run yet
+  useEffect(() => {
+    if (selectedRepoId && isUuid(selectedRepoId)) {
+      queryClient.invalidateQueries({ queryKey: ['code-vision-files', selectedRepoId] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-lifecycle'] });
+
+      if (summary && !summary.latestRun && !isRunning && !isStartingAnalysis) {
+        console.log('[CodeVisionAI] Auto-initializing code-level analysis for selected repo:', selectedRepoId);
+        handleStartAnalysis(false);
+      }
+    }
+  }, [selectedRepoId, summary?.latestRun, queryClient]);
+
+  // Refetch source files table query as soon as analysis job status reaches COMPLETED
+  useEffect(() => {
+    if (selectedRepoId && isUuid(selectedRepoId) && summary?.latestRun?.status === 'COMPLETED') {
+      console.log('[CodeVisionAI] Code Vision analysis COMPLETED for repo:', selectedRepoId, '— Refetching file analysis registry...');
+      queryClient.invalidateQueries({ queryKey: ['code-vision-files', selectedRepoId] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-lifecycle'] });
+    }
+  }, [selectedRepoId, summary?.latestRun?.status, queryClient]);
+
+  const resolveRepoIdToDb = async (repoId: string): Promise<string> => {
+    const repoOption = repositories.find((r) => r.id === repoId);
+    if ((repoOption?.isGithubOnly || !isUuid(repoId)) && repoOption?.url) {
+      console.log('[CodeVisionAI] Resolving GitHub URL to database repository entity:', repoOption.url);
+      const res = await githubUrlMutation.mutateAsync(repoOption.url);
+      if (res && res.repositoryId) {
+        return res.repositoryId;
+      }
+    }
+    return repoId;
+  };
+
+  const handleStartAnalysis = async (force = false) => {
+    const targetIds = isMultiMode ? selectedRepoIds : [selectedRepoId].filter(Boolean);
+
+    if (targetIds.length === 0) {
+      alert('Please select at least one repository before starting analysis.');
+      return;
+    }
+
+    try {
+      setIsStartingAnalysis(true);
+      console.log('[CodeVisionAI] Starting analysis for target IDs:', targetIds);
+
+      const resolvedDbRepoIds: string[] = [];
+      for (const id of targetIds) {
+        const resolvedId = await resolveRepoIdToDb(id);
+        resolvedDbRepoIds.push(resolvedId);
+      }
+
+      console.log('[CodeVisionAI] Resolved database repository IDs:', resolvedDbRepoIds);
+
+      if (resolvedDbRepoIds.length === 1) {
+        const targetId = resolvedDbRepoIds[0];
+        setSelectedRepoId(targetId);
+        if (force) {
+          await forceRescanMutation.mutateAsync(targetId);
+        } else {
+          await startAnalysisMutation.mutateAsync({ repositoryId: targetId, force: false });
+        }
+        queryClient.invalidateQueries({ queryKey: ['code-vision-summary', targetId] });
+        queryClient.invalidateQueries({ queryKey: ['code-vision-files', targetId] });
+      } else {
+        await startBatchAnalysisMutation.mutateAsync({ repositoryIds: resolvedDbRepoIds, force });
+        resolvedDbRepoIds.forEach((id) => {
+          queryClient.invalidateQueries({ queryKey: ['code-vision-summary', id] });
+          queryClient.invalidateQueries({ queryKey: ['code-vision-files', id] });
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['pipeline-lifecycle'] });
+    } catch (err: any) {
+      console.error('[CodeVisionAI] Failed to start analysis:', err);
+      alert(err?.response?.data?.message || err?.message || 'Failed to start repository analysis.');
+    } finally {
+      setIsStartingAnalysis(false);
     }
   };
 
@@ -87,6 +367,8 @@ export const CodeVisionAI: React.FC = () => {
         return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
     }
   };
+
+  const isPendingState = isStartingAnalysis || startAnalysisMutation.isPending || startBatchAnalysisMutation.isPending || forceRescanMutation.isPending;
 
   return (
     <DashboardLayout
@@ -119,42 +401,92 @@ export const CodeVisionAI: React.FC = () => {
 
         {/* Repository Selector & Controls */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-mono text-slate-400">Repository:</label>
-            <select
-              value={selectedRepoId}
-              onChange={(e) => {
-                setSelectedRepoId(e.target.value);
-                setPage(0);
-              }}
-              className="bg-cyber-900 border border-glass-border text-slate-200 text-xs font-mono rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500"
+          {/* Mode Switcher */}
+          <div className="flex items-center bg-slate-900/80 p-1 rounded-xl border border-white/[0.08] font-mono text-[10px]">
+            <button
+              onClick={() => setIsMultiMode(false)}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                !isMultiMode ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              {repos.length === 0 && <option value="">No Repositories Found</option>}
-              {repos.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.repositoryName} ({r.gitProvider})
-                </option>
-              ))}
-            </select>
+              Single
+            </button>
+            <button
+              onClick={() => setIsMultiMode(true)}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                isMultiMode ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Multi ({selectedRepoIds.length})
+            </button>
           </div>
+
+          {!isMultiMode ? (
+            <div className="flex items-center gap-2">
+              <label htmlFor="repository-selector" className="text-xs font-mono text-slate-400">
+                Repository:
+              </label>
+              <select
+                id="repository-selector"
+                value={selectedRepoId}
+                onChange={(e) => handleRepoSelect(e.target.value)}
+                disabled={reposLoading || isPendingState}
+                className="bg-cyber-900 border border-glass-border text-slate-200 text-xs font-mono rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500 min-w-[240px] cursor-pointer disabled:opacity-50 relative z-10"
+              >
+                {reposLoading ? (
+                  <option value="">Loading repositories...</option>
+                ) : repositories.length === 0 ? (
+                  <option value="">No Repositories Available</option>
+                ) : (
+                  repositories.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.fullName || r.name} ({r.gitProvider})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSelectAllRepos}
+                className="text-[10px] font-mono px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+              >
+                {selectedRepoIds.length === repositories.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <span className="text-xs font-mono text-cyan-400 font-bold">
+                {selectedRepoIds.length} Repositories Selected
+              </span>
+            </div>
+          )}
 
           <button
             onClick={() => handleStartAnalysis(false)}
-            disabled={!selectedRepoId || isRunning || startAnalysisMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono text-xs font-bold transition-all disabled:opacity-50 shadow-lg shadow-cyan-500/20"
+            disabled={
+              (isMultiMode ? selectedRepoIds.length === 0 : !selectedRepoId) ||
+              isRunning ||
+              isPendingState ||
+              reposLoading
+            }
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono text-xs font-bold transition-all disabled:opacity-50 shadow-lg shadow-cyan-500/20 cursor-pointer disabled:cursor-not-allowed"
           >
-            {startAnalysisMutation.isPending || isRunning ? (
+            {isPendingState || isRunning ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
               <Zap size={14} />
             )}
-            Start Analysis
+            {isPendingState ? 'Starting Analysis...' : isMultiMode ? `Start Batch Analysis (${selectedRepoIds.length})` : 'Start Analysis'}
           </button>
 
           <button
             onClick={() => handleStartAnalysis(true)}
-            disabled={!selectedRepoId || isRunning || forceRescanMutation.isPending}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-mono text-xs transition-all disabled:opacity-50"
+            disabled={
+              (isMultiMode ? selectedRepoIds.length === 0 : !selectedRepoId) ||
+              isRunning ||
+              isPendingState ||
+              reposLoading
+            }
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-mono text-xs transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             title="Force Full Scan (bypass incremental hash cache)"
           >
             <RotateCcw size={13} />
@@ -162,6 +494,71 @@ export const CodeVisionAI: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Multi-Repo Selection Grid Panel when Multi Mode is active */}
+      {isMultiMode && (
+        <div className="glass-strong rounded-2xl p-4 mb-8 border border-cyan-500/30 bg-cyber-900/40 shadow-xl">
+          <div className="flex items-center justify-between mb-3 border-b border-white/[0.06] pb-2">
+            <h3 className="text-xs font-mono font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+              <Zap size={14} className="text-cyan-400" /> Multi-Repository Batch Selection Panel
+            </h3>
+            <span className="text-[10px] font-mono text-slate-400">
+              Check repositories to run simultaneous AI risk scans
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto no-scrollbar pr-1">
+            {repositories.map((repo) => {
+              const isChecked = selectedRepoIds.includes(repo.id);
+              const isFocus = selectedRepoId === repo.id;
+              return (
+                <div
+                  key={repo.id}
+                  onClick={() => handleToggleMultiRepo(repo.id)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
+                    isChecked
+                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                      : 'bg-slate-900/40 border-white/[0.06] text-slate-400 hover:bg-white/[0.03]'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {}} // handled by parent div onClick
+                    className="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-xs font-mono font-bold truncate ${isChecked ? 'text-white' : 'text-slate-300'}`}>
+                      {repo.name}
+                    </p>
+                    <p className="text-[10px] font-mono text-slate-500 truncate">
+                      {repo.fullName}
+                    </p>
+                  </div>
+                  {isFocus && (
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-cyan-400/20 text-cyan-300 border border-cyan-400/30 shrink-0">
+                      FOCUS
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* No Repositories Warning Banner */}
+      {repositories.length === 0 && !reposLoading && (
+        <div className="glass-strong rounded-2xl p-4 mb-8 border border-amber-500/30 bg-amber-950/20 text-amber-300 flex items-center gap-3 shadow-xl">
+          <ShieldAlert size={20} className="text-amber-400 shrink-0" />
+          <div>
+            <h3 className="text-xs font-mono font-bold uppercase">No Repositories Available</h3>
+            <p className="text-xs text-amber-200/80 font-sans mt-0.5">
+              Connect your GitHub account or register a repository in the Repository Intelligence Center to run Code Vision AI.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Embedded Pipeline Navigation Card */}
       <div className="mb-8">

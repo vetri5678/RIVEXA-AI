@@ -58,3 +58,10 @@ Desktop.ini
 $RECYCLE.BIN/
 *.log
 logs/
+
+# ── Temporary Generated Test Reports ─────────────────────────
+audit_downloaded_report.pdf
+downloaded_test_report.pdf
+downloaded_test_report.xlsx
+*_test_report.pdf
+*_test_report.xlsx

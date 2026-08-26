@@ -1,0 +1,87 @@
+{
+  "name": "RIVEXA — Executive Report Generation & Distribution Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "report-generated",
+        "options": {}
+      },
+      "name": "Webhook — Report Generated",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "webhookId": "rivexa-report-generated-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "reportId",
+              "value": "={{ $json.body.reportId }}"
+            },
+            {
+              "name": "repositoryId",
+              "value": "={{ $json.body.repositoryId }}"
+            },
+            {
+              "name": "reportType",
+              "value": "={{ $json.body.reportType }}"
+            },
+            {
+              "name": "format",
+              "value": "={{ $json.body.format }}"
+            },
+            {
+              "name": "generatedBy",
+              "value": "={{ $json.body.generatedBy }}"
+            },
+            {
+              "name": "status",
+              "value": "READY_FOR_DISTRIBUTION"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Format Report Metadata",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        340,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook — Report Generated": {
+      "main": [
+        [
+          {
+            "node": "Format Report Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "id": "rivexa-report-automation-workflow",
+  "tags": [
+    {
+      "name": "RIVEXA"
+    },
+    {
+      "name": "Reports"
+    }
+  ]
+}

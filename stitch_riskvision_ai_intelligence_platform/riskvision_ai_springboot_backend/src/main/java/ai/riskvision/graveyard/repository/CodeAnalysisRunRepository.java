@@ -11,7 +11,9 @@ import java.util.UUID;
 @Repository
 public interface CodeAnalysisRunRepository extends JpaRepository<CodeAnalysisRunEntity, UUID> {
     Optional<CodeAnalysisRunEntity> findTopByRepositoryIdAndUserIdOrderByCreatedAtDesc(UUID repositoryId, UUID userId);
+    Optional<CodeAnalysisRunEntity> findTopByRepositoryIdOrderByCreatedAtDesc(UUID repositoryId);
     Optional<CodeAnalysisRunEntity> findTopByRepositoryIdAndUserIdAndStatusOrderByCreatedAtDesc(UUID repositoryId, UUID userId, String status);
     List<CodeAnalysisRunEntity> findByRepositoryIdAndUserIdOrderByCreatedAtDesc(UUID repositoryId, UUID userId);
     List<CodeAnalysisRunEntity> findByRepositoryIdAndStatus(UUID repositoryId, String status);
+    Optional<CodeAnalysisRunEntity> findTopByOrderByCreatedAtDesc();
 }

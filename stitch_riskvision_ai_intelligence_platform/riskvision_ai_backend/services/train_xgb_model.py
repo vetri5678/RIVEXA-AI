@@ -50,14 +50,16 @@ logger = logging.getLogger("riskvision.train_xgb")
 # Feature columns — must match the exact feature schema of the project
 # ---------------------------------------------------------------------------
 FEATURE_COLS = [
-    "Project Budget", "Actual Cost", "Schedule Delay", "Team Size",
-    "Open Issues", "Critical Bugs", "Completion %", "Client Requirement Changes",
-    "Priority", "Department", "Project Type", "Estimated Cost",
-    "Actual Duration", "Estimated Duration", "Resource Utilization",
-    "Customer Satisfaction", "Technical Debt", "Security Issues", "Compliance Issues",
+    "Project Budget", "Actual Cost", "Estimated Duration", "Actual Duration",
+    "Schedule Delay", "Completion %", "Team Size", "Developer Experience",
+    "Open Issues", "Critical Bugs", "Code Coverage", "Technical Debt",
+    "Security Vulnerabilities", "Dependency Vulnerabilities", "Repository Health",
+    "Build Failures", "Deployment Failures", "Requirement Changes",
+    "Customer Satisfaction", "Priority", "Department", "Project Type",
 ]
 CAT_COLS = ["Priority", "Department", "Project Type"]
 TARGET_COL = "Risk Level"
+
 
 
 def _resolve_dataset_path(dataset_path: str | None, base_dir: str) -> Path:
@@ -209,29 +211,15 @@ def train_xgb_model(dataset_path: str = None, models_dir: str = None) -> dict:
         [float(v) for v in xgb_clf.feature_importances_],
     ))
 
-    # ── 9. Save XGBoost Model (.joblib & .pkl) ───────────────────────────────
+    # ── 9. Save XGBoost Model (.joblib) ───────────────────────────────────────
     canonical_model_path = resolved_models_dir / "xgboost_model.joblib"
     joblib.dump(xgb_clf, canonical_model_path)
     logger.info("XGBoost model saved (canonical joblib): %s", canonical_model_path)
 
-    pkl_model_path = resolved_models_dir / "xgboost_model.pkl"
-    joblib.dump(xgb_clf, pkl_model_path)
-
-    # Legacy fallback file overwrite so any legacy reader gets the XGBoost model object
-    legacy_rf_joblib = resolved_models_dir / "random_forest.joblib"
-    legacy_rf_pkl = resolved_models_dir / "random_forest.pkl"
-    joblib.dump(xgb_clf, legacy_rf_joblib)
-    joblib.dump(xgb_clf, legacy_rf_pkl)
-
-    versioned_model_path = resolved_models_dir / f"xgboost_model_{timestamp}.joblib"
-    shutil.copy2(canonical_model_path, versioned_model_path)
-
-    # ── 10. Save Encoders (.joblib & .pkl) ───────────────────────────────────
+    # ── 10. Save Encoders (.joblib) ───────────────────────────────────────────
     encoder_bundle = {"encoders": encoders, "target_encoder": target_encoder}
     encoders_path = resolved_models_dir / "encoders.joblib"
-    encoders_pkl_path = resolved_models_dir / "encoders.pkl"
     joblib.dump(encoder_bundle, encoders_path)
-    joblib.dump(encoder_bundle, encoders_pkl_path)
     logger.info("Encoders saved: %s", encoders_path)
 
     # ── 11. Save Transformer Bundle ──────────────────────────────────────────
@@ -255,24 +243,22 @@ def train_xgb_model(dataset_path: str = None, models_dir: str = None) -> dict:
     versioned_tf_path = resolved_transformers_dir / f"transformer_bundle_{timestamp}.joblib"
     shutil.copy2(canonical_tf_path, versioned_tf_path)
 
-    # ── 12. Save model_metadata.json ─────────────────────────────────────────
-    current_version_str = "xgboost-v1.0"
-    meta_path = resolved_models_dir / "model_metadata.json"
-    if meta_path.exists():
-        try:
-            with open(meta_path, "r", encoding="utf-8") as fh:
-                old_meta = json.load(fh)
-                old_ver = old_meta.get("model_version") or old_meta.get("version")
-                if old_ver and "v" in old_ver:
-                    import re
-                    match = re.search(r'v(\d+)\.(\d+)', old_ver)
-                    if match:
-                        major, minor = int(match.group(1)), int(match.group(2))
-                        current_version_str = f"xgboost-v{major}.{minor + 1}"
-                    else:
-                        current_version_str = f"{old_ver}.1"
-        except Exception as ex:
-            logger.warning("Could not read previous version tag from metadata: %s", ex)
+    # ── 12. Save model_metadata.json & feature_schema.json ────────────────────
+    current_version_str = "xgboost-v2.4"
+
+    feature_schema = {
+        "model_version": current_version_str,
+        "feature_names": available_features,
+        "feature_count": len(available_features),
+        "categorical_features": available_cat,
+        "trained_at": trained_at,
+        "target_column": TARGET_COL,
+        "target_classes": target_encoder.classes_.tolist(),
+    }
+    schema_path = resolved_models_dir / "feature_schema.json"
+    with open(schema_path, "w", encoding="utf-8") as fh:
+        json.dump(feature_schema, fh, indent=2)
+    logger.info("Feature schema saved: %s", schema_path)
 
     metadata = {
         "model_name": "XGBoost",
@@ -330,6 +316,7 @@ def train_xgb_model(dataset_path: str = None, models_dir: str = None) -> dict:
             "encoders": str(encoders_path),
             "transformer_canonical": str(canonical_tf_path),
             "transformer_versioned": str(versioned_tf_path),
+            "feature_schema": str(schema_path),
         },
     }
 
@@ -337,6 +324,7 @@ def train_xgb_model(dataset_path: str = None, models_dir: str = None) -> dict:
     with open(meta_path, "w", encoding="utf-8") as fh:
         json.dump(metadata, fh, indent=2)
     logger.info("Metadata saved: %s", meta_path)
+
 
     logger.info("=" * 60)
     logger.info("Training COMPLETE — XGBoost model is READY")

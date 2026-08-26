@@ -65,8 +65,8 @@ export const PredictionPipelineWidget: React.FC = () => {
     { name: 'Extract', status: 'COMPLETED', progressPct: 100, durationSeconds: 10, startTime: new Date().toISOString(), currentStage: false },
     { name: 'Cleanse', status: 'COMPLETED', progressPct: 100, durationSeconds: 12, startTime: new Date().toISOString(), currentStage: false },
     { name: 'Model Engine', status: 'COMPLETED', progressPct: 100, durationSeconds: 14, startTime: new Date().toISOString(), currentStage: false },
-    { name: 'Inference', status: 'RUNNING', progressPct: 68, durationSeconds: 16, startTime: new Date().toISOString(), currentStage: true },
-    { name: 'SHAP (XAI)', status: 'PENDING', progressPct: 0, durationSeconds: 18, startTime: new Date().toISOString(), currentStage: false },
+    { name: 'Inference', status: 'COMPLETED', progressPct: 100, durationSeconds: 16, startTime: new Date().toISOString(), currentStage: false },
+    { name: 'SHAP (XAI)', status: 'COMPLETED', progressPct: 100, durationSeconds: 18, startTime: new Date().toISOString(), currentStage: false },
   ];
 
   return (

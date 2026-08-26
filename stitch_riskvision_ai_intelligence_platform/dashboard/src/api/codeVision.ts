@@ -91,6 +91,14 @@ export const codeVisionApi = {
     return data;
   },
 
+  startBatchAnalysis: async (repositoryIds: string[], force = false): Promise<{ totalSubmitted: number; runs: CodeAnalysisRun[] }> => {
+    const { data } = await apiClient.post<{ totalSubmitted: number; runs: CodeAnalysisRun[] }>(
+      `/repositories/code-analysis/batch`,
+      { repositoryIds, force }
+    );
+    return data;
+  },
+
   getLatestSummary: async (repositoryId: string): Promise<CodeVisionSummary> => {
     const { data } = await apiClient.get<CodeVisionSummary>(
       `/repositories/${repositoryId}/code-analysis/latest`

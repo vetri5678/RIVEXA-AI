@@ -1,0 +1,125 @@
+{
+  "name": "RIVEXA — High Risk Alert & Security Incident Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "high-risk-detected",
+        "options": {}
+      },
+      "name": "Webhook — High Risk Alert",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "webhookId": "rivexa-high-risk-alert-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ Number($json.body.riskScore || 0) }}",
+              "operation": "gte",
+              "value2": 80
+            }
+          ]
+        }
+      },
+      "name": "Check Critical Risk Threshold (>= 80)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "alertLevel",
+              "value": "CRITICAL_SECURITY_ALERT"
+            },
+            {
+              "name": "predictionId",
+              "value": "={{ $json.body.predictionId }}"
+            },
+            {
+              "name": "repositoryName",
+              "value": "={{ $json.body.repositoryName }}"
+            },
+            {
+              "name": "riskScore",
+              "value": "={{ $json.body.riskScore }}"
+            },
+            {
+              "name": "failureProbability",
+              "value": "={{ ($json.body.failureProbability * 100).toFixed(1) }}%"
+            },
+            {
+              "name": "triggeredBy",
+              "value": "={{ $json.body.triggeredBy }}"
+            },
+            {
+              "name": "alertMessage",
+              "value": "=🚨 HIGH RISK DETECTED: Repository '{{ $json.body.repositoryName }}' has a failure risk score of {{ $json.body.riskScore }}/100. Immediate audit recommended."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Construct Security Notification",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        560,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook — High Risk Alert": {
+      "main": [
+        [
+          {
+            "node": "Check Critical Risk Threshold (>= 80)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Critical Risk Threshold (>= 80)": {
+      "main": [
+        [
+          {
+            "node": "Construct Security Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "id": "rivexa-high-risk-alert-workflow",
+  "tags": [
+    {
+      "name": "RIVEXA"
+    },
+    {
+      "name": "Alerts"
+    },
+    {
+      "name": "Security"
+    }
+  ]
+}

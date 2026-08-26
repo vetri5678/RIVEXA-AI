@@ -2,6 +2,8 @@ package ai.riskvision.graveyard.service;
 
 import ai.riskvision.graveyard.dto.pipeline.PipelineStageDTO;
 import ai.riskvision.graveyard.dto.pipeline.PipelineStatusResponse;
+import ai.riskvision.graveyard.entity.CodeAnalysisRunEntity;
+import ai.riskvision.graveyard.repository.CodeAnalysisRunRepository;
 import ai.riskvision.graveyard.repository.RepositoryEntityRepository;
 import ai.riskvision.graveyard.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +25,7 @@ public class PipelineService {
 
     private final UserRepository userRepository;
     private final RepositoryEntityRepository repoRepository;
+    private final CodeAnalysisRunRepository runRepository;
 
     public PipelineStatusResponse getPipelineStatus() {
         log.debug("Executing PipelineService.getPipelineStatus()");
@@ -67,15 +71,49 @@ public class PipelineService {
 
     public List<PipelineStageDTO> getPipelineStages(long repoCount) {
         LocalDateTime now = LocalDateTime.now();
-        int secondsStep = (int) ((System.currentTimeMillis() / 1000) % 60);
-
-        // Dynamically compute progress percentage cycling smoothly based on current system timestamp
-        double cycleProgress = (secondsStep % 15) / 15.0 * 100.0;
-        int activeIndex = (secondsStep / 10) % 6;
-
         String[] stageNames = {
             "Repo Sync", "Extract", "Cleanse", "Model Engine", "Inference", "SHAP (XAI)"
         };
+
+        Optional<CodeAnalysisRunEntity> latestRunOpt = runRepository.findTopByOrderByCreatedAtDesc();
+        int activeIndex = 5; // Default: all completed if idle
+        String runStatus = "COMPLETED";
+        double activeProgressPct = 100.0;
+
+        if (latestRunOpt.isPresent()) {
+            CodeAnalysisRunEntity run = latestRunOpt.get();
+            runStatus = run.getStatus();
+            if ("RUNNING".equalsIgnoreCase(runStatus) || "QUEUED".equalsIgnoreCase(runStatus)) {
+                String currFile = run.getCurrentlyAnalyzingFile() != null ? run.getCurrentlyAnalyzingFile() : "";
+                if (currFile.contains("REPO_SYNC") || currFile.contains("Fetching GitHub Tree")) {
+                    activeIndex = 0; // Repo Sync
+                    activeProgressPct = 60.0;
+                } else if (currFile.contains("CLEANSE") || currFile.contains("AST Normalization")) {
+                    activeIndex = 2; // Cleanse
+                    activeProgressPct = 85.0;
+                } else if (currFile.contains("MODEL_ENGINE") || currFile.contains("Feature Vector")) {
+                    activeIndex = 3; // Model Engine
+                    activeProgressPct = 90.0;
+                } else if (currFile.contains("INFERENCE") || currFile.contains("Risk Probability") || currFile.contains("XGBoost")) {
+                    activeIndex = 4; // Inference
+                    activeProgressPct = 95.0;
+                } else if (currFile.contains("SHAP") || currFile.contains("TreeSHAP")) {
+                    activeIndex = 5; // SHAP (XAI)
+                    activeProgressPct = 98.0;
+                } else {
+                    activeIndex = 1; // Extracting & Analyzing source files
+                    int discovered = run.getFilesDiscovered() != null ? run.getFilesDiscovered() : 1;
+                    int analyzed = run.getFilesAnalyzed() != null ? run.getFilesAnalyzed() : 0;
+                    activeProgressPct = Math.min(99.0, Math.round((analyzed * 100.0 / Math.max(1, discovered)) * 10.0) / 10.0);
+                }
+            } else if ("FAILED".equalsIgnoreCase(runStatus)) {
+                activeIndex = 1;
+                activeProgressPct = 0.0;
+            } else {
+                activeIndex = 5;
+                activeProgressPct = 100.0;
+            }
+        }
 
         List<PipelineStageDTO> stages = new ArrayList<>();
         for (int i = 0; i < stageNames.length; i++) {
@@ -84,19 +122,22 @@ public class PipelineService {
             double progress;
             boolean isCurrent = (i == activeIndex);
 
-            if (i < activeIndex) {
+            if ("FAILED".equalsIgnoreCase(runStatus) && i == activeIndex) {
+                status = "FAILED";
+                progress = 0.0;
+            } else if (i < activeIndex || "COMPLETED".equalsIgnoreCase(runStatus)) {
                 status = "COMPLETED";
                 progress = 100.0;
-            } else if (i == activeIndex) {
+            } else if (i == activeIndex && ("RUNNING".equalsIgnoreCase(runStatus) || "QUEUED".equalsIgnoreCase(runStatus))) {
                 status = "RUNNING";
-                progress = Math.round(cycleProgress * 10.0) / 10.0;
+                progress = activeProgressPct;
             } else {
                 status = "PENDING";
                 progress = 0.0;
             }
 
             LocalDateTime start = now.minusSeconds((stageNames.length - i) * 12L);
-            LocalDateTime end = (i < activeIndex) ? start.plusSeconds(8) : null;
+            LocalDateTime end = "COMPLETED".equals(status) ? start.plusSeconds(8) : null;
 
             stages.add(PipelineStageDTO.builder()
                     .name(name)
@@ -105,7 +146,7 @@ public class PipelineService {
                     .durationSeconds(8 + (i * 2))
                     .startTime(start)
                     .endTime(end)
-                    .currentStage(isCurrent)
+                    .currentStage(isCurrent && !"COMPLETED".equalsIgnoreCase(runStatus))
                     .build());
         }
 

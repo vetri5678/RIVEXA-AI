@@ -70,7 +70,7 @@ def test_single_prediction_logic():
     assert 0.0 <= result["probability"] <= 1.0
     assert len(result["topFeatures"]) > 0
     assert result["model"] in ["Random Forest", "XGBoost"]
-    assert result["version"] in ["1.0.0", "xgboost-v1.0"]
+    assert result["version"] in ["1.0.0", "xgboost-v1.0", "xgboost-v2.4"]
 
 
 def test_health_endpoint():

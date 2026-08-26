@@ -1,6 +1,5 @@
 package ai.riskvision.graveyard.service;
 
-import ai.riskvision.graveyard.entity.CodeFindingEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,5 +67,48 @@ class CodeVisionAnalysisEngineTest {
                 .anyMatch(f -> f.getTitle().contains("Swallowed Exception"));
 
         assertThat(hasSecretFinding || hasExceptionFinding).isTrue();
+
+        // Assert dynamic, code-aware recommendation content
+        for (var finding : result.getFindings()) {
+            assertThat(finding.getRecommendation()).isNotNull();
+            assertThat(finding.getRecommendation()).doesNotContain("Refactor deeply nested logic using guard clauses");
+        }
+    }
+
+    @Test
+    @DisplayName("recommendationEngine: generates distinct, language-aware, symbol-aware recommendations")
+    void testDynamicRecommendations() {
+        CodeVisionRecommendationEngine recEngine = new CodeVisionRecommendationEngine();
+
+        String javaRec = recEngine.generateRecommendation(
+                "Exception Handling Issue",
+                "Swallowed Exception Detected",
+                "authenticate()",
+                46, 47,
+                "Java",
+                "catch (Exception e) {}",
+                "src/com/example/AuthService.java",
+                2, 50
+        );
+        assertThat(javaRec).contains("authenticate()");
+        assertThat(javaRec).contains("lines 46–47");
+        assertThat(javaRec).contains("AuthService.java");
+        assertThat(javaRec).contains("@Slf4j log.error");
+
+        String pySecretRec = recEngine.generateRecommendation(
+                "Security Vulnerability",
+                "Potential Hardcoded Secret / Credential",
+                "connect_db()",
+                12, 12,
+                "Python",
+                "db_pass = 'secret_pass_9999'",
+                "services/db_service.py",
+                1, 30
+        );
+        assertThat(pySecretRec).contains("`db_pass`");
+        assertThat(pySecretRec).contains("os.getenv");
+        assertThat(pySecretRec).contains("db_service.py");
+
+        assertThat(javaRec).isNotEqualTo(pySecretRec);
     }
 }

@@ -46,8 +46,8 @@ class MLServiceLoader:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         self.models_dir = os.path.join(base_dir, "models")
-        self.model_path = os.path.join(self.models_dir, "random_forest.pkl")
-        self.encoders_path = os.path.join(self.models_dir, "encoders.pkl")
+        self.model_path = os.path.join(self.models_dir, "xgboost_model.joblib")
+        self.encoders_path = os.path.join(self.models_dir, "encoders.joblib")
         self.metadata_path = os.path.join(self.models_dir, "model_metadata.json")
 
         self.model = None
@@ -64,25 +64,28 @@ class MLServiceLoader:
         if not hasattr(self, 'models_dir') or not self.models_dir:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             self.models_dir = os.path.join(base_dir, "models")
-            self.model_path = os.path.join(self.models_dir, "random_forest.pkl")
-            self.encoders_path = os.path.join(self.models_dir, "encoders.pkl")
-            self.metadata_path = os.path.join(self.models_dir, "model_metadata.json")
 
+        self.model_path = os.path.join(self.models_dir, "xgboost_model.joblib")
         if not os.path.exists(self.model_path):
             cwd_models = os.path.join(os.getcwd(), "models")
-            if os.path.exists(os.path.join(cwd_models, "random_forest.pkl")):
+            if os.path.exists(os.path.join(cwd_models, "xgboost_model.joblib")):
                 self.models_dir = cwd_models
-                self.model_path = os.path.join(self.models_dir, "random_forest.pkl")
-                self.encoders_path = os.path.join(self.models_dir, "encoders.pkl")
-                self.metadata_path = os.path.join(self.models_dir, "model_metadata.json")
+                self.model_path = os.path.join(cwd_models, "xgboost_model.joblib")
 
-        logger.info(f"Loading ML model artifacts from {self.models_dir}...")
-        if os.path.exists(self.model_path) and os.path.exists(self.encoders_path):
+        self.encoders_path = os.path.join(self.models_dir, "encoders.joblib")
+        self.metadata_path = os.path.join(self.models_dir, "model_metadata.json")
+
+        logger.info(f"Loading production XGBoost ML model artifacts from {self.models_dir} (model_path={self.model_path})...")
+        if self.model_path and os.path.exists(self.model_path) and os.path.exists(self.encoders_path):
             try:
                 self.model = joblib.load(self.model_path)
                 enc_data = joblib.load(self.encoders_path)
                 self.encoders = enc_data.get("encoders")
                 self.target_encoder = enc_data.get("target_encoder")
+
+                assert self.model is not None, "XGBoost model object is null after joblib.load"
+                assert self.encoders is not None, "Encoders dictionary is null after joblib.load"
+                logger.info(f"✅ Production XGBoost Model validated successfully: class={type(self.model).__name__}, encoders={len(self.encoders)}")
 
                 if os.path.exists(self.metadata_path):
                     with open(self.metadata_path, "r") as f:
@@ -201,14 +204,24 @@ class MLServiceLoader:
 
                 top_factors = [col for col, val in contributions[:3]]
 
-                positives = [{"feature": col, "value": round(float(val), 4)} for col, val in contributions if val > 0]
-                negatives = [{"feature": col, "value": round(float(val), 4)} for col, val in contributions if val < 0]
-                waterfall = [{"feature": col, "impact": round(float(val), 4)} for col, val in contributions[:8]]
+                positives = [
+                    {"feature": col, "display_name": col, "value": round(float(val), 4), "impact": round(float(val), 4), "direction": "INCREASING_RISK"}
+                    for col, val in contributions if val > 0
+                ]
+                negatives = [
+                    {"feature": col, "display_name": col, "value": round(float(val), 4), "impact": round(float(val), 4), "direction": "DECREASING_RISK"}
+                    for col, val in contributions if val < 0
+                ]
+                waterfall = [
+                    {"feature": col, "display_name": col, "impact": round(float(val), 4), "direction": "INCREASING_RISK" if val > 0 else "DECREASING_RISK"}
+                    for col, val in contributions[:8]
+                ]
 
                 shap_details = {
                     "positive": positives[:5],
                     "negative": negatives[:5],
-                    "waterfall": waterfall
+                    "waterfall": waterfall,
+                    "human_explanation": f"Model inference determined risk level '{risk_level}' (confidence: {round(confidence * 100.0, 1)}%). Top risk factors: {', '.join(top_factors[:3])}."
                 }
             except Exception as e:
                 logger.warning(f"SHAP explanation computation failed: {e}")

@@ -1,0 +1,40 @@
+{
+  "model_version": "xgboost-v2.4",
+  "feature_names": [
+    "Project Budget",
+    "Actual Cost",
+    "Estimated Duration",
+    "Actual Duration",
+    "Schedule Delay",
+    "Completion %",
+    "Team Size",
+    "Developer Experience",
+    "Open Issues",
+    "Critical Bugs",
+    "Code Coverage",
+    "Technical Debt",
+    "Security Vulnerabilities",
+    "Dependency Vulnerabilities",
+    "Repository Health",
+    "Build Failures",
+    "Deployment Failures",
+    "Requirement Changes",
+    "Customer Satisfaction",
+    "Priority",
+    "Department",
+    "Project Type"
+  ],
+  "feature_count": 22,
+  "categorical_features": [
+    "Priority",
+    "Department",
+    "Project Type"
+  ],
+  "trained_at": "2026-08-22T12:31:00.678594+00:00",
+  "target_column": "Risk Level",
+  "target_classes": [
+    "HIGH",
+    "LOW",
+    "MEDIUM"
+  ]
+}

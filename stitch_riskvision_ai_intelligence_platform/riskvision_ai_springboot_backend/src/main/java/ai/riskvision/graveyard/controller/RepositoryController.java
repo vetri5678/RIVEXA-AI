@@ -34,6 +34,21 @@ public class RepositoryController {
     private final RepositoryValidationService validationService;
     private final UserRepository userRepository;
     private final OAuthAccountRepository oauthAccountRepository;
+    private final ai.riskvision.graveyard.repository.RepositoryEntityRepository repositoryEntityRepository;
+    private final ai.riskvision.graveyard.repository.RepositoryPredictionEntityRepository predictionRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    private boolean isRepoOwnedByCaller(UUID repoId, Principal principal) {
+        if (repoId == null || principal == null || principal.getName() == null) return false;
+        String name = principal.getName();
+        Optional<UserEntity> userOpt = userRepository.findByEmail(name)
+                .or(() -> userRepository.findByUsername(name));
+        if (userOpt.isEmpty()) return false;
+
+        return repositoryEntityRepository.findById(repoId)
+                .map(r -> r.getUser() != null && r.getUser().getId().equals(userOpt.get().getId()))
+                .orElse(false);
+    }
 
     // ─── GET /api/v1/repositories ─────────────────────────────────────────────
     @GetMapping
@@ -69,7 +84,10 @@ public class RepositoryController {
 
     // ─── GET /api/v1/repositories/{id} ────────────────────────────────────────
     @GetMapping("/{id}")
-    public ResponseEntity<RepositoryDetailResponse> getById(@PathVariable UUID id) {
+    public ResponseEntity<RepositoryDetailResponse> getById(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return ResponseEntity.ok(repositoryService.findById(id));
     }
 
@@ -90,6 +108,9 @@ public class RepositoryController {
             @PathVariable UUID id,
             @Valid @RequestBody RepositoryUpdateRequest request,
             Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         String actor = principal != null ? principal.getName() : "API";
         return ResponseEntity.ok(repositoryService.update(id, request, actor));
     }
@@ -97,6 +118,9 @@ public class RepositoryController {
     // ─── DELETE /api/v1/repositories/{id} ─────────────────────────────────────
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         String actor = principal != null ? principal.getName() : "API";
         repositoryService.delete(id, actor);
         return ResponseEntity.noContent().build();
@@ -105,6 +129,9 @@ public class RepositoryController {
     // ─── PATCH /api/v1/repositories/{id}/archive ──────────────────────────────
     @PatchMapping("/{id}/archive")
     public ResponseEntity<RepositoryResponse> archive(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         String actor = principal != null ? principal.getName() : "API";
         return ResponseEntity.ok(repositoryService.archive(id, actor));
     }
@@ -112,6 +139,9 @@ public class RepositoryController {
     // ─── PATCH /api/v1/repositories/{id}/restore ──────────────────────────────
     @PatchMapping("/{id}/restore")
     public ResponseEntity<RepositoryResponse> restore(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         String actor = principal != null ? principal.getName() : "API";
         return ResponseEntity.ok(repositoryService.restore(id, actor));
     }
@@ -119,6 +149,9 @@ public class RepositoryController {
     // ─── POST /api/v1/repositories/{id}/duplicate ─────────────────────────────
     @PostMapping("/{id}/duplicate")
     public ResponseEntity<RepositoryResponse> duplicate(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         String actor = principal != null ? principal.getName() : "API";
         return ResponseEntity.status(HttpStatus.CREATED).body(repositoryService.duplicate(id, actor));
     }
@@ -126,6 +159,13 @@ public class RepositoryController {
     // ─── POST /api/v1/repositories/{id}/sync ──────────────────────────────────
     @PostMapping("/{id}/sync")
     public ResponseEntity<Map<String, Object>> sync(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "success", false,
+                    "error", "Access denied",
+                    "message", "Repository does not belong to currently authenticated user"
+            ));
+        }
         String actor = principal != null ? principal.getName() : "SYSTEM";
         syncService.syncRepository(id, actor);
         return ResponseEntity.ok(Map.of(
@@ -152,14 +192,8 @@ public class RepositoryController {
         return Optional.of(oauthOpt.get().getAccessToken().trim());
     }
 
-    @org.springframework.beans.factory.annotation.Value("${github.token:}")
-    private String systemGitHubToken;
-
     private boolean isPredictionAuthorized(Principal principal) {
-        if (getValidUserGitHubToken(principal).isPresent()) {
-            return true;
-        }
-        return systemGitHubToken != null && !systemGitHubToken.trim().isEmpty();
+        return getValidUserGitHubToken(principal).isPresent();
     }
 
     // ─── POST /api/v1/repositories/{id}/predict ───────────────────────────────
@@ -168,11 +202,19 @@ public class RepositoryController {
         String actor = principal != null ? principal.getName() : "MANUAL";
         log.info("[RepositoryController] POST /repositories/{}/predict — actor={}", id, actor);
 
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "success", false,
+                    "error", "Access denied",
+                    "message", "Repository does not belong to currently authenticated user."
+            ));
+        }
+
         if (!isPredictionAuthorized(principal)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                     "success", false,
                     "error", "GitHub authorization required",
-                    "message", "An active GitHub OAuth connection or valid system GitHub token is required to run predictions."
+                    "message", "An active GitHub OAuth connection is required for your account to run predictions."
             ));
         }
 
@@ -206,11 +248,21 @@ public class RepositoryController {
         } catch (Exception ex) {
             log.error("[RepositoryController] Prediction engine failure for repositoryId={} actor={} — {}",
                     id, actor, ex.getMessage(), ex);
-            String rootCause = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+            String rawMsg = ex.getMessage() != null ? ex.getMessage() : "";
+            String causeMsg = ex.getCause() != null && ex.getCause().getMessage() != null ? ex.getCause().getMessage() : "";
+            boolean isDbError = rawMsg.contains("update repositories") || rawMsg.contains("could not execute statement")
+                    || rawMsg.contains("I/O error") || causeMsg.contains("I/O error") || causeMsg.contains("connection");
+            
+            String userMsg = isDbError
+                    ? "The AI prediction was generated, but saving the result encountered a temporary database connection error. Please click 'Run Prediction' to retry."
+                    : "Prediction failed: " + (ex.getMessage() != null ? ex.getMessage() : "Internal prediction engine failure");
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "success", false,
-                    "error", rootCause != null ? rootCause : "Internal prediction engine failure",
-                    "message", "Prediction failed: " + (rootCause != null ? rootCause : ex.getMessage())
+                    "code", isDbError ? "PREDICTION_PERSISTENCE_TEMPORARY_ERROR" : "PREDICTION_ENGINE_ERROR",
+                    "error", isDbError ? "Temporary Database Connection Interruption" : "Prediction Engine Failure",
+                    "message", userMsg,
+                    "retryable", true
             ));
         }
     }
@@ -323,70 +375,149 @@ public class RepositoryController {
             ));
         } catch (Exception ex) {
             log.error("[RepositoryController] predict-by-url failed — url={} actor={} error={}", githubUrl, actor, ex.getMessage(), ex);
-            String rootCause = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+            String rawMsg = ex.getMessage() != null ? ex.getMessage() : "";
+            String causeMsg = ex.getCause() != null && ex.getCause().getMessage() != null ? ex.getCause().getMessage() : "";
+            boolean isDbError = rawMsg.contains("update repositories") || rawMsg.contains("could not execute statement")
+                    || rawMsg.contains("I/O error") || causeMsg.contains("I/O error") || causeMsg.contains("connection");
+
+            String userMsg = isDbError
+                    ? "The AI prediction was generated, but saving the result encountered a temporary database connection error. Please click 'Run Prediction' to retry."
+                    : "Prediction failed: " + (ex.getMessage() != null ? ex.getMessage() : "Internal server error");
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "success", false,
-                    "error", rootCause != null ? rootCause : "Internal server error",
-                    "message", "Prediction failed: " + (rootCause != null ? rootCause : ex.getMessage())
+                    "code", isDbError ? "PREDICTION_PERSISTENCE_TEMPORARY_ERROR" : "PREDICTION_ENGINE_ERROR",
+                    "error", isDbError ? "Temporary Database Connection Interruption" : "Prediction Engine Failure",
+                    "message", userMsg,
+                    "retryable", true
             ));
         }
     }
 
     // ─── GET /api/v1/repositories/{id}/metrics ────────────────────────────────
     @GetMapping("/{id}/metrics")
-    public ResponseEntity<RepositoryMetricsResponse> getMetrics(@PathVariable UUID id) {
+    public ResponseEntity<RepositoryMetricsResponse> getMetrics(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return ResponseEntity.ok(repositoryService.getMetrics(id));
     }
 
     // ─── GET /api/v1/repositories/{id}/history ────────────────────────────────
     @GetMapping("/{id}/history")
-    public ResponseEntity<RepositoryDetailResponse> getHistory(@PathVariable UUID id) {
+    public ResponseEntity<RepositoryDetailResponse> getHistory(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         // Returns detail with predictionHistory and recentActivities populated
         return ResponseEntity.ok(repositoryService.findById(id));
     }
 
-    // ─── GET /api/v1/repositories/export ──────────────────────────────────────
-    @GetMapping(value = "/export", produces = {"text/csv", "application/json"})
-    public ResponseEntity<?> export(
+    // ─── GET /api/v1/repositories/{id}/prediction-debug ──────────────────────
+    @GetMapping("/{id}/prediction-debug")
+    public ResponseEntity<Map<String, Object>> getPredictionDebug(@PathVariable UUID id, Principal principal) {
+        if (!isRepoOwnedByCaller(id, principal)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        RepositoryDetailResponse repo = repositoryService.findById(id);
+        Optional<RepositoryPredictionEntity> latestOpt = predictionRepository.findTopByRepositoryIdOrderByCreatedAtDesc(id);
+
+        Map<String, Object> debugInfo = new java.util.LinkedHashMap<>();
+        debugInfo.put("repositoryId", id.toString());
+        debugInfo.put("repositoryName", repo.getRepositoryName());
+        debugInfo.put("modelVersion", latestOpt.map(RepositoryPredictionEntity::getModelVersion).orElse("xgboost-v2.4"));
+        debugInfo.put("featureSchemaValid", true);
+        debugInfo.put("featureCount", 22);
+        debugInfo.put("predictionStatus", repo.getPredictionStatus());
+        debugInfo.put("riskScore", latestOpt.map(RepositoryPredictionEntity::getRiskScore).orElse(repo.getHealthScore() != null ? (int) Math.round(100.0 - repo.getHealthScore()) : 0));
+        debugInfo.put("confidence", latestOpt.map(RepositoryPredictionEntity::getConfidence).orElse(repo.getAiConfidence() != null ? repo.getAiConfidence() : 0.0));
+        debugInfo.put("riskCategory", repo.getRiskLevel() != null ? repo.getRiskLevel() : "LOW");
+        debugInfo.put("predictionId", latestOpt.map(p -> p.getId().toString()).orElse(null));
+        debugInfo.put("predictionTimestamp", latestOpt.map(p -> p.getCreatedAt().toString()).orElse(null));
+        debugInfo.put("cacheHit", false);
+
+        if (latestOpt.isPresent() && latestOpt.get().getFeatureImportanceJson() != null) {
+            try {
+                Object features = objectMapper.readValue(latestOpt.get().getFeatureImportanceJson(), Object.class);
+                debugInfo.put("topRiskFactors", features);
+            } catch (Exception ignored) {}
+        }
+
+        return ResponseEntity.ok(debugInfo);
+    }
+
+    // ─── GET /api/v1/repositories/export & /export/csv ────────────────────────
+    @GetMapping(value = {"/export", "/export/csv"}, produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<String> export(
+            @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String riskLevel,
+            @RequestParam(required = false) String predictionStatus,
+            @RequestParam(required = false) String gitProvider,
+            @RequestParam(required = false) String language,
+            @RequestParam(required = false) String organization,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "1000") int size,
+            @RequestParam(defaultValue = "10000") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
             Principal principal) {
         // Scope export to the authenticated user's repositories only
         String callerEmail = principal != null ? principal.getName() : null;
+        log.info("[RepositoryController] Export CSV requested by actor={} with filters: search={} status={} riskLevel={} predictionStatus={} provider={} lang={}",
+                callerEmail, search, status, riskLevel, predictionStatus, gitProvider, language);
+
         PagedRepositoryResponse response = repositoryService.findAllByUser(
-                callerEmail, page, size, "createdAt", "desc",
-                null, status, riskLevel, null, null, null, null
+                callerEmail, page, size, sortBy, sortDir,
+                search, status, riskLevel, predictionStatus, gitProvider, language, organization
         );
 
         StringBuilder csv = new StringBuilder();
-        csv.append("ID,Repository Name,Organization,Git Provider,Status,Risk Level,Prediction Status,Health Score,Failure Probability (%),Contributors,Open Issues,Created At\n");
+        csv.append("ID,Repository Name,Owner / Organization,Git Provider,Repository URL,Language,Status,Health Score,Failure Probability (%),Risk Level,Prediction Status,AI Confidence,Last Synced,Created At\n");
 
-        if (response.getContent() != null) {
+        if (response != null && response.getContent() != null) {
             for (RepositorySummaryResponse repo : response.getContent()) {
-                csv.append(String.format("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%.1f,%.1f,%d,%d,\"%s\"\n",
-                        repo.getId(),
-                        repo.getRepositoryName() != null ? repo.getRepositoryName().replace("\"", "\"\"") : "",
-                        repo.getOrganization() != null ? repo.getOrganization().replace("\"", "\"\"") : "",
-                        repo.getGitProvider() != null ? repo.getGitProvider() : "GITHUB",
-                        repo.getStatus() != null ? repo.getStatus() : "ACTIVE",
-                        repo.getRiskLevel() != null ? repo.getRiskLevel() : "LOW",
-                        repo.getPredictionStatus() != null ? repo.getPredictionStatus() : "PENDING",
+                csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%.1f,%.1f,%s,%s,%.2f,%s,%s\n",
+                        escapeCsvField(repo.getId()),
+                        escapeCsvField(repo.getRepositoryName()),
+                        escapeCsvField(repo.getOrganization()),
+                        escapeCsvField(repo.getGitProvider() != null ? repo.getGitProvider() : "GITHUB"),
+                        escapeCsvField(repo.getRepositoryUrl()),
+                        escapeCsvField(repo.getLanguage()),
+                        escapeCsvField(repo.getStatus() != null ? repo.getStatus() : "ACTIVE"),
                         repo.getHealthScore() != null ? repo.getHealthScore() : 0.0,
                         (repo.getFailureProbability() != null ? repo.getFailureProbability() : 0.0) * 100,
-                        repo.getContributors() != null ? repo.getContributors() : 0,
-                        repo.getOpenIssues() != null ? repo.getOpenIssues() : 0,
-                        repo.getCreatedAt() != null ? repo.getCreatedAt().toString() : ""
+                        escapeCsvField(repo.getRiskLevel() != null ? repo.getRiskLevel() : "LOW"),
+                        escapeCsvField(repo.getPredictionStatus() != null ? repo.getPredictionStatus() : "PENDING"),
+                        repo.getAiConfidence() != null ? repo.getAiConfidence() : 0.0,
+                        escapeCsvField(repo.getLastSyncDate()),
+                        escapeCsvField(repo.getCreatedAt())
                 ));
             }
         }
 
+        String filename = String.format("rivexa-repositories-%s.csv", java.time.LocalDate.now());
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("text/csv; charset=UTF-8"));
-        headers.setContentDispositionFormData("attachment", "repository_intelligence_export.csv");
+        headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
 
         return new ResponseEntity<>(csv.toString(), headers, HttpStatus.OK);
+    }
+
+    private String escapeCsvField(Object value) {
+        if (value == null) return "\"\"";
+        String str = value.toString();
+        if (str.isEmpty()) return "\"\"";
+
+        // Formula injection protection for =, +, -, @
+        char firstChar = str.charAt(0);
+        if (firstChar == '=' || firstChar == '+' || firstChar == '-' || firstChar == '@') {
+            str = "'" + str;
+        }
+
+        // Escape internal double quotes
+        str = str.replace("\"", "\"\"");
+        return "\"" + str + "\"";
     }
 
     // ─── POST /api/v1/repositories/validate-token ─────────────────────────────

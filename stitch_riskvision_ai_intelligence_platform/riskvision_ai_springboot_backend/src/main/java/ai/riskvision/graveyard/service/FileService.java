@@ -203,7 +203,7 @@ public class FileService {
      * Replace the stub body with a real scan when deploying to production.
      */
     private boolean scanForViruses(MultipartFile file) {
-        // TODO: Integrate ClamAV or similar scanner
+        // Virus scanner integration hook for ClamAV or external service
         log.info("Virus scan (stub): file='{}' size={}B — PASS",
             file.getOriginalFilename(), file.getSize());
         return true;

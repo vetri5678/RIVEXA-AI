@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node dev-runner.js",
+    "dev:full": "node dev-runner.js --with-n8n",
     "dev:frontend": "vite stitch_riskvision_ai_intelligence_platform/dashboard",
     "build": "vite build stitch_riskvision_ai_intelligence_platform/dashboard",
     "preview": "vite preview stitch_riskvision_ai_intelligence_platform/dashboard",

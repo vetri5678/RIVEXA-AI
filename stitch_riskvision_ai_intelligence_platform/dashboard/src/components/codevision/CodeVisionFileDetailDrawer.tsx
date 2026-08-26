@@ -25,6 +25,17 @@ export const CodeVisionFileDetailDrawer: React.FC<CodeVisionFileDetailDrawerProp
   const [selectedFinding, setSelectedFinding] = useState<CodeFinding | null>(null);
   const [showSourceViewer, setShowSourceViewer] = useState(true);
 
+  React.useEffect(() => {
+    if (fileId) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [fileId]);
+
   if (!fileId) return null;
 
   const getSeverityBadge = (severity: string) => {
@@ -45,7 +56,7 @@ export const CodeVisionFileDetailDrawer: React.FC<CodeVisionFileDetailDrawerProp
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-black/70 backdrop-blur-sm transition-opacity duration-300">
-      <div className="w-full max-w-4xl bg-cyber-950 border-l border-glass-border h-full flex flex-col shadow-2xl overflow-hidden">
+      <div className="w-full max-w-full sm:max-w-2xl md:max-w-4xl bg-cyber-950 border-l border-glass-border h-full flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-glass-border bg-cyber-900/40 shrink-0">
           <div className="flex items-center gap-3 min-w-0">

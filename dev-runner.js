@@ -138,7 +138,7 @@ const SERVICES = {
     name: 'Spring Boot Backend',
     cwd: CONFIG.directories.springboot,
     command: resolveMavenCmd(),
-    args: ['spring-boot:run', '-Dspring-boot.run.jvmArguments=-Dserver.port=8080', '-Dspring-boot.run.profiles=dev'],
+    args: ['compile', 'spring-boot:run', '-Dspring-boot.run.jvmArguments=-Dserver.port=8080', '-Dspring-boot.run.profiles=dev'],
     healthCheck: 'http://127.0.0.1:8080/api/v1/health',
     useShell: false,
     timeoutMs: 300000,
@@ -299,6 +299,10 @@ function auditEnvironment() {
     {
       name: 'OpenRouter LLM',
       configured: !!(process.env.OPENROUTER_API_KEY)
+    },
+    {
+      name: 'n8n Automation Engine',
+      configured: process.env.N8N_WEBHOOK_ENABLED !== 'false'
     }
   ];
 
@@ -493,12 +497,14 @@ function getPidsOnPort(port) {
       const pids = new Set();
       for (const line of lines) {
         const parts = line.trim().split(/\s+/);
-        const localAddr = parts[1];
-        const state = parts[parts.length - 2];
-        if (localAddr && (localAddr.endsWith(`:${port}`) || localAddr.endsWith(`[::]:${port}`)) && (state === 'LISTENING' || !state)) {
+        if (parts.length >= 5) {
+          const localAddr = parts[1];
+          const state = parts[parts.length - 2];
           const pid = parts[parts.length - 1];
-          if (pid && !isNaN(pid) && pid !== '0') {
-            pids.add(pid);
+          if (localAddr && (localAddr.endsWith(`:${port}`) || localAddr.includes(`:${port}`)) && pid && !isNaN(pid) && pid !== '0') {
+            if (state === 'LISTENING' || !state || state === 'ESTABLISHED') {
+              pids.add(pid);
+            }
           }
         }
       }
@@ -533,10 +539,14 @@ function spawnService(key, config) {
     let spawnArgs = [...config.args];
     let useShell = config.useShell;
 
-    if (isWin && (spawnCmd.toLowerCase().endsWith('.cmd') || spawnCmd.toLowerCase().endsWith('.bat') || spawnCmd.includes(' '))) {
-      spawnCmd = `"${spawnCmd}" ${spawnArgs.join(' ')}`;
-      spawnArgs = [];
-      useShell = true;
+    if (isWin) {
+      const ext = path.extname(spawnCmd).toLowerCase();
+      if (ext === '.cmd' || ext === '.bat' || spawnCmd.endsWith('mvn.cmd') || spawnCmd.endsWith('npm.cmd') || spawnCmd.endsWith('vite.cmd')) {
+        const comSpec = process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe';
+        spawnArgs = ['/c', spawnCmd, ...spawnArgs];
+        spawnCmd = comSpec;
+        useShell = false;
+      }
     }
 
     log('system', `Launching ${config.name}...`);
@@ -549,7 +559,8 @@ function spawnService(key, config) {
       cwd: config.cwd,
       detached: false,
       shell: useShell,
-      env: serviceEnv
+      env: serviceEnv,
+      windowsHide: true
     });
 
     child.serviceKey = key;
@@ -621,13 +632,11 @@ function formatStartupFailure(serviceName, command, cwd, exitCode, logs) {
   let rootCause = 'Unknown error during process execution.';
   const fullLog = logs.join('\n');
 
-  if (fullLog.includes('Port already in use') || fullLog.includes('Address already in use')) {
+  if (fullLog.includes('PortInUseException') || fullLog.includes('Port already in use') || fullLog.includes('Address already in use') || fullLog.includes('already in use') || fullLog.includes('Port 8080 was already in use') || fullLog.includes('Web server failed to start')) {
     rootCause = 'Port Conflict: Target TCP port is already in use by another process.';
   } else if (fullLog.includes('ClassNotFoundException')) {
     const match = fullLog.match(/ClassNotFoundException: ([^\s\r\n]+)/);
     rootCause = `Missing Java Class: ${match ? match[1] : 'ClassNotFoundException'}`;
-  } else if (fullLog.includes('BeanCreationException')) {
-    rootCause = 'Spring Bean Creation Exception: Failed to instantiate component/service bean.';
   } else if (fullLog.includes('HikariPool') && fullLog.includes('Connection is not available')) {
     rootCause = 'Database Connection Pool Exhaustion: HikariCP unable to establish database connections. Check network connectivity to Supabase.';
   } else if (fullLog.includes('SQLException') || fullLog.includes('Connection refused') || fullLog.includes('timeout')) {
@@ -636,6 +645,8 @@ function formatStartupFailure(serviceName, command, cwd, exitCode, logs) {
     rootCause = 'Python Dependency Missing: ModuleNotFoundError encountered during FastAPI startup.';
   } else if (fullLog.includes('Unable to open JDBC Connection')) {
     rootCause = 'JDBC Connection Error: Database connection establishment failed. Check Supabase database host, credentials, and SSL configuration.';
+  } else if (fullLog.includes('BeanCreationException')) {
+    rootCause = 'Spring Bean Creation Exception: Failed to instantiate component/service bean.';
   }
 
   return `
@@ -744,15 +755,6 @@ function pollHealth(child, healthUrl, timeoutMs = 120000) {
           log(child.serviceKey, `Health check error (attempt ${attempts}): ${err.message}`, 'warn');
         }
       });
-
-      // Exponential backoff for Spring Boot after many attempts
-      if (isSpringBoot && attempts > 20) {
-        if (interval) clearInterval(interval);
-        backoffMs = Math.min(backoffMs * 1.2, 10000); // Cap at 10s
-        setTimeout(() => {
-          interval = setInterval(pollCheck, backoffMs);
-        }, backoffMs);
-      }
     };
 
     interval = setInterval(pollCheck, backoffMs);
@@ -801,6 +803,7 @@ async function main() {
         log('system', 'Waiting for FastAPI prediction engine to become healthy...');
         await pollHealth(fastapiChild, SERVICES.fastapi.healthCheck, SERVICES.fastapi.timeoutMs);
         log('fastapi', `HEALTH PASSED — ${SERVICES.fastapi.name} ready on http://localhost:${CONFIG.ports.fastapi}`);
+        return true;
       } catch (err) {
         log('fastapi', `❌ Prediction engine failed to start:\n${err.message}`, 'error');
         shutdown(1);
@@ -815,6 +818,7 @@ async function main() {
         log('system', 'Waiting for Spring Boot backend to complete initialization...');
         await pollHealth(springbootChild, SERVICES.springboot.healthCheck, SERVICES.springboot.timeoutMs);
         log('springboot', `HEALTH PASSED — ${SERVICES.springboot.name} ready on http://localhost:${CONFIG.ports.springboot}`);
+        return true;
       } catch (err) {
         log('springboot', `❌ Spring Boot backend failed to start:\n${err.message}`, 'error');
         shutdown(1);
@@ -832,11 +836,7 @@ async function main() {
           log('system', 'Waiting for Vite frontend server...');
           await pollHealth(frontendChild, SERVICES.frontend.healthCheck, SERVICES.frontend.timeoutMs);
           log('frontend', `HEALTH PASSED — ${SERVICES.frontend.name} ready on http://localhost:${CONFIG.ports.frontend}`);
-          
-          // Open browser at the landing page root — js/app.js handles routing to #/login
-          const appUrl = `http://localhost:${CONFIG.ports.frontend}/`;
-          openBrowser(appUrl);
-          break; // Success — exit retry loop
+          return true;
         } catch (viteErr) {
           const isPortConflict = viteErr.message && (viteErr.message.includes('Port') || viteErr.message.includes('EADDRINUSE') || viteErr.message.includes('already in use'));
           if (isPortConflict && viteAttempt < maxViteRetries) {
@@ -854,11 +854,42 @@ async function main() {
     })();
 
     log('system', '====================================================');
-    log('system', ' ALL SERVICES INITIATED');
+    log('system', ' ALL SERVICES INITIATED — AWAITING HEALTH CHECKS');
     log('system', '====================================================');
-    log('system', ' Services are starting up concurrently.');
+
+    await Promise.all([fastapiPromise, springbootPromise, frontendPromise]);
+
+    const withN8n = process.argv.includes('--with-n8n');
+    if (withN8n) {
+      try {
+        log('system', '[4/4] Launching n8n Automation Engine Container (:5678)...');
+        exec('docker compose up -d n8n', (err, stdout) => {
+          if (err) {
+            log('system', `⚠️ n8n container launch warning (Docker may be unavailable): ${err.message}`, 'warn');
+          } else {
+            log('system', `n8n Automation Engine ready on http://localhost:5678`);
+          }
+        });
+      } catch (ex) {
+        log('system', `⚠️ Could not launch n8n container: ${ex.message}`, 'warn');
+      }
+    }
+
+    log('system', '====================================================');
+    log('system', ' RIVEXA DEVELOPMENT ENVIRONMENT READY');
+    log('system', '====================================================');
+    log('system', ` Frontend:   http://localhost:${CONFIG.ports.frontend}`);
+    log('system', ` Spring Boot: http://localhost:${CONFIG.ports.springboot} (Health: http://localhost:${CONFIG.ports.springboot}/api/v1/health)`);
+    log('system', ` FastAPI:     http://localhost:${CONFIG.ports.fastapi} (Health: http://localhost:${CONFIG.ports.fastapi}/health)`);
+    if (withN8n) {
+      log('system', ` n8n Engine:  http://localhost:5678`);
+    }
+    log('system', '====================================================');
     log('system', ' Press Ctrl+C to stop all services cleanly.');
     log('system', '====================================================');
+
+    const appUrl = `http://localhost:${CONFIG.ports.frontend}/`;
+    openBrowser(appUrl);
 
   } catch (err) {
     log('system', '\n❌ CRITICAL STARTUP FAILURE:', 'error');

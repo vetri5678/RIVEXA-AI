@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   GitBranch, ShieldCheck, Eye, AlertTriangle, Skull, Archive, Brain
 } from 'lucide-react';
-import type { RepositoryStatistics } from '../../types/repository';
+import type { RepositoryStatistics, RepositorySummary } from '../../types/repository';
 
 interface Props {
   stats: RepositoryStatistics | undefined;
   isLoading: boolean;
+  repositories?: RepositorySummary[];
 }
 
 interface StatCard {
@@ -31,7 +32,75 @@ const SkeletonCard: React.FC = () => (
   </div>
 );
 
-export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) => {
+export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading, repositories = [] }) => {
+  const computedStats = useMemo(() => {
+    if (stats) {
+      return stats;
+    }
+    if (repositories.length === 0) return undefined;
+
+    let healthy = 0;
+    let underObservation = 0;
+    let highRisk = 0;
+    let predictedDead = 0;
+    let archived = 0;
+    let withPredictions = 0;
+    let pendingPrediction = 0;
+    let sumHealth = 0;
+    let sumFailProb = 0;
+
+    repositories.forEach((r) => {
+      if (r.status === 'ARCHIVED') {
+        archived++;
+        return;
+      }
+
+      const hasPred = r.predictionStatus === 'COMPLETED' || r.failureProbability != null || (r.healthScore != null && r.healthScore > 0);
+      if (hasPred) {
+        withPredictions++;
+        const failProb = r.failureProbability ?? 0;
+        const health = r.healthScore ?? Math.max(0, (1.0 - failProb) * 100);
+        sumHealth += health;
+        sumFailProb += failProb;
+
+        const rl = (r.riskLevel || '').toUpperCase();
+        if (rl === 'LOW' || (!rl && failProb < 0.25)) {
+          healthy++;
+        } else if (rl === 'MEDIUM' || (!rl && failProb < 0.50)) {
+          underObservation++;
+        } else if (rl === 'HIGH' || (!rl && failProb < 0.75)) {
+          highRisk++;
+        } else {
+          predictedDead++;
+        }
+      } else {
+        pendingPrediction++;
+      }
+    });
+
+    const total = repositories.length;
+    const active = total - archived;
+    const coveragePct = total > 0 ? (withPredictions / total) * 100 : 0;
+    const avgHealthScore = withPredictions > 0 ? sumHealth / withPredictions : 0;
+    const avgFailureProbability = withPredictions > 0 ? sumFailProb / withPredictions : 0;
+
+    return {
+      total,
+      healthy,
+      underObservation,
+      highRisk,
+      predictedDead,
+      archived,
+      active,
+      pendingPrediction,
+      aiCoveragePercent: Math.round(coveragePct * 10) / 10,
+      avgHealthScore: Math.round(avgHealthScore * 10) / 10,
+      avgFailureProbability: Math.round(avgFailureProbability * 1000) / 1000,
+      totalPredictionsRun: withPredictions,
+      lastSyncTime: new Date().toISOString(),
+    };
+  }, [stats, repositories]);
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
@@ -43,7 +112,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
   const cards: StatCard[] = [
     {
       label: 'Total Repos',
-      value: stats?.total ?? 0,
+      value: computedStats?.total ?? 0,
       icon: GitBranch,
       color: 'text-neon-blue',
       glow: 'shadow-[0_0_20px_rgba(0,212,255,0.1)]',
@@ -52,7 +121,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
     },
     {
       label: 'Healthy',
-      value: stats?.healthy ?? 0,
+      value: computedStats?.healthy ?? 0,
       icon: ShieldCheck,
       color: 'text-neon-green',
       glow: 'shadow-[0_0_20px_rgba(0,255,136,0.1)]',
@@ -61,7 +130,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
     },
     {
       label: 'Observing',
-      value: stats?.underObservation ?? 0,
+      value: computedStats?.underObservation ?? 0,
       icon: Eye,
       color: 'text-neon-yellow',
       glow: 'shadow-[0_0_20px_rgba(245,158,11,0.1)]',
@@ -70,7 +139,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
     },
     {
       label: 'High Risk',
-      value: stats?.highRisk ?? 0,
+      value: computedStats?.highRisk ?? 0,
       icon: AlertTriangle,
       color: 'text-neon-orange',
       glow: 'shadow-[0_0_20px_rgba(251,146,60,0.1)]',
@@ -79,7 +148,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
     },
     {
       label: 'Pred. Dead',
-      value: stats?.predictedDead ?? 0,
+      value: computedStats?.predictedDead ?? 0,
       icon: Skull,
       color: 'text-neon-pink',
       glow: 'shadow-[0_0_20px_rgba(255,45,85,0.15)]',
@@ -88,7 +157,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
     },
     {
       label: 'Archived',
-      value: stats?.archived ?? 0,
+      value: computedStats?.archived ?? 0,
       icon: Archive,
       color: 'text-slate-400',
       glow: '',
@@ -97,7 +166,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
     },
     {
       label: 'AI Coverage',
-      value: `${stats?.aiCoveragePercent?.toFixed(1) ?? '0.0'}`,
+      value: `${computedStats?.aiCoveragePercent?.toFixed(1) ?? '0.0'}`,
       icon: Brain,
       color: 'text-neon-purple',
       glow: 'shadow-[0_0_20px_rgba(168,85,247,0.1)]',
@@ -108,7 +177,7 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
+    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4 mb-6">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
@@ -134,11 +203,11 @@ export const RepositorySummaryCards: React.FC<Props> = ({ stats, isLoading }) =>
               </div>
 
               {/* Mini progress bar */}
-              {stats && card.label !== 'AI Coverage' && typeof card.value === 'number' && stats.total > 0 && (
+              {computedStats && card.label !== 'AI Coverage' && typeof card.value === 'number' && computedStats.total > 0 && (
                 <div className="h-0.5 bg-cyber-800 rounded-full mt-2 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-700 ${card.bg.replace('bg-', 'bg-').replace('/5', '/60')}`}
-                    style={{ width: `${Math.min(100, ((card.value as number) / stats.total) * 100)}%` }}
+                    style={{ width: `${Math.min(100, ((card.value as number) / computedStats.total) * 100)}%` }}
                   />
                 </div>
               )}

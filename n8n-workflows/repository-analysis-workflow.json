@@ -1,0 +1,114 @@
+{
+  "name": "RIVEXA — Repository Analysis & Sync Event Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "repository-sync",
+        "options": {}
+      },
+      "name": "Webhook — Repository Sync",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "webhookId": "rivexa-repository-sync-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.headers['x-rivexa-event'] || $json.body.eventType }}",
+              "operation": "contains",
+              "value2": "REPOSITORY_SYNC"
+            }
+          ]
+        }
+      },
+      "name": "Validate Event Type",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "repositoryId",
+              "value": "={{ $json.body.repositoryId }}"
+            },
+            {
+              "name": "repositoryName",
+              "value": "={{ $json.body.repositoryName }}"
+            },
+            {
+              "name": "gitProvider",
+              "value": "={{ $json.body.gitProvider }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.body.status }}"
+            },
+            {
+              "name": "processedAt",
+              "value": "={{ $now.toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Format Sync Log Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        540,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook — Repository Sync": {
+      "main": [
+        [
+          {
+            "node": "Validate Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Event Type": {
+      "main": [
+        [
+          {
+            "node": "Format Sync Log Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "id": "rivexa-repo-sync-workflow",
+  "tags": [
+    {
+      "name": "RIVEXA"
+    },
+    {
+      "name": "Repository"
+    }
+  ]
+}

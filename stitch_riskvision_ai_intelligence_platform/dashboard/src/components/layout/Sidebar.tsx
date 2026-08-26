@@ -108,8 +108,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-50 h-screen bg-[#0B1220]/95 backdrop-blur-2xl border-r border-white/[0.08] flex flex-col transition-all duration-300 shadow-2xl select-none lg:translate-x-0 ${
-        mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
+      className={`fixed left-0 top-0 z-50 h-screen bg-[#0B1220]/95 backdrop-blur-2xl border-r border-white/[0.08] flex flex-col transition-all duration-300 shadow-2xl select-none ${
+        mobileOpen ? 'translate-x-0 w-64 max-w-[85vw]' : '-translate-x-full lg:translate-x-0'
       } ${collapsed ? 'lg:w-16' : 'lg:w-64'}`}
     >
       {/* Brand & Workspace Header */}

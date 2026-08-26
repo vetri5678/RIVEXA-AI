@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Search, ExternalLink, Calendar, ShieldAlert, Zap, AlertCircle, CheckCircle2, Lock, Globe, Code2 } from 'lucide-react';
 import { FaGithub } from 'react-icons/fa';
 import { useGithubUserRepositories } from '../../../hooks/useRepository';
@@ -75,6 +75,18 @@ export const RunPredictionModal: React.FC<RunPredictionModalProps> = ({
       setTimeout(() => urlInputRef.current?.focus(), 60);
     }
   }, [activeTab]);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

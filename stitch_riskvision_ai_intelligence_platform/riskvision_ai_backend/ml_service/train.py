@@ -23,8 +23,8 @@ from .evaluation import evaluate_model
 from .preprocess import FEATURE_COLUMNS, preprocess_training_data
 
 
-def train_rf_model(dataset_path: str = None, output_models_dir: str = None) -> dict:
-    """Trains XGBoost model, calculates metrics, saves artifacts."""
+def train_xgb_model(dataset_path: str = None, output_models_dir: str = None) -> dict:
+    """Trains XGBoost model, calculates metrics, saves canonical joblib artifacts."""
     if not dataset_path:
         dataset_path = str(DATASET_PATH)
     if not output_models_dir:
@@ -67,18 +67,11 @@ def train_rf_model(dataset_path: str = None, output_models_dir: str = None) -> d
     )
 
     model_file_xgb = os.path.join(output_models_dir, "xgboost_model.joblib")
-    model_file_pkl = os.path.join(output_models_dir, "xgboost_model.pkl")
-    legacy_model_file = os.path.join(output_models_dir, "random_forest.pkl")
-    encoders_file = os.path.join(output_models_dir, "encoders.pkl")
     encoders_joblib = os.path.join(output_models_dir, "encoders.joblib")
     metadata_file = os.path.join(output_models_dir, "model_metadata.json")
 
     joblib.dump(clf, model_file_xgb)
-    joblib.dump(clf, model_file_pkl)
-    joblib.dump(clf, legacy_model_file)
-
     enc_bundle = {"encoders": encoders, "target_encoder": target_encoder}
-    joblib.dump(enc_bundle, encoders_file)
     joblib.dump(enc_bundle, encoders_joblib)
 
     metadata = {
@@ -110,6 +103,11 @@ def train_rf_model(dataset_path: str = None, output_models_dir: str = None) -> d
     return metadata
 
 
+# Backward-compatibility aliases
+train_rf_model = train_xgb_model
+train_model = train_xgb_model
+
+
 if __name__ == "__main__":
-    train_rf_model()
+    train_xgb_model()
 

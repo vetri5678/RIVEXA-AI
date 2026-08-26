@@ -15,7 +15,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -64,6 +63,32 @@ public class CodeVisionController {
         CodeAnalysisRunResponse run = codeVisionJobService.startOrQueueAnalysis(repositoryId, user.getId(), force);
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(run);
+    }
+
+    /**
+     * POST /api/v1/repositories/code-analysis/batch
+     * Queues/starts Code Vision AI analysis for multiple repositories in batch.
+     */
+    @PostMapping("/code-analysis/batch")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<BatchCodeAnalysisResponse> startBatchCodeAnalysis(
+            @RequestBody BatchCodeAnalysisRequest request,
+            Principal principal) {
+
+        UserEntity user = resolveAuthenticatedUser(principal);
+        log.info("[CodeVisionController] POST /code-analysis/batch — user={} reposCount={} force={}",
+                user.getEmail(), request != null && request.getRepositoryIds() != null ? request.getRepositoryIds().size() : 0,
+                request != null && request.isForce());
+
+        if (request == null || request.getRepositoryIds() == null || request.getRepositoryIds().isEmpty()) {
+            throw new IllegalArgumentException("Batch analysis request requires at least one repository ID.");
+        }
+
+        BatchCodeAnalysisResponse response = codeVisionJobService.startBatchAnalysis(
+                request.getRepositoryIds(), user.getId(), request.isForce()
+        );
+
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
     /**

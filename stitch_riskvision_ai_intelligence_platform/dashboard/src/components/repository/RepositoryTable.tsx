@@ -52,6 +52,30 @@ const gitProviderIcon: Record<string, string> = {
   OTHER: '◉',
 };
 
+const getCleanRepoName = (repo: any): string => {
+  if (!repo) return 'Repository';
+  let name = repo.repositoryName || repo.name || repo.fullName || repo.full_name;
+  if (name && name !== '(Unnamed)' && name !== 'Unnamed Repository' && name.trim() !== '') {
+    return name;
+  }
+  const url = repo.repositoryUrl || repo.html_url || repo.url || '';
+  if (url) {
+    const cleanUrl = url.trim().replace(/\/+$/, '').replace(/\.git$/, '');
+    const parts = cleanUrl.split('/');
+    if (parts.length >= 2) {
+      const owner = parts[parts.length - 2];
+      const r = parts[parts.length - 1];
+      if (owner && r && !owner.includes(':') && !owner.includes('.')) {
+        return `${owner}/${r}`;
+      }
+      if (r) return r;
+    } else if (parts.length === 1 && parts[0]) {
+      return parts[0];
+    }
+  }
+  return repo.id ? `Repository-${String(repo.id).substring(0, 8)}` : 'Repository';
+};
+
 const SortIcon: React.FC<{ col: string; active: string; dir: SortDir }> = ({ col, active, dir }) => {
   if (active !== col) return <ChevronsUpDown size={12} className="text-slate-600" />;
   return dir === 'asc' ? <ChevronUp size={12} className="text-neon-blue" /> : <ChevronDown size={12} className="text-neon-blue" />;
@@ -211,7 +235,7 @@ export const RepositoryTable: React.FC<Props> = ({
                   <td className="px-3 py-3" onClick={() => onRowClick(repo.id)}>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-slate-100 font-bold text-xs truncate max-w-[180px]">
-                        {repo.repositoryName}
+                        {getCleanRepoName(repo)}
                       </span>
                       {repo.language && (
                         <span className="text-[10px] text-slate-500">{repo.language}</span>
@@ -309,7 +333,7 @@ export const RepositoryTable: React.FC<Props> = ({
 
       {/* Pagination */}
       {!isLoading && totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-glass-border">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-glass-border">
           <span className="text-xs text-slate-500 font-mono">
             Page {filters.page + 1} of {totalPages} · {totalElements.toLocaleString()} total
           </span>

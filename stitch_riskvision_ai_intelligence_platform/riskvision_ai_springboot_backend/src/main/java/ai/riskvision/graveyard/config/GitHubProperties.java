@@ -34,5 +34,7 @@ public class GitHubProperties {
         private int maxConnTotal = 50;
         private int maxConnPerRoute = 20;
         private int cacheTtlMinutes = 15;
+        private int maxFilesToAnalyze = 100;
+        private long maxFileSizeBytes = 512000L; // 500 KB
     }
 }

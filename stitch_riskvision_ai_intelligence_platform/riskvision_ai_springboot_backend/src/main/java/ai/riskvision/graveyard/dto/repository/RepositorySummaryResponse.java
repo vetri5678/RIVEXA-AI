@@ -12,7 +12,6 @@ import java.util.UUID;
 public class RepositorySummaryResponse {
 
     private UUID id;
-    @com.fasterxml.jackson.annotation.JsonProperty("repository_name")
     private String repositoryName;
     private String organization;
     private String description;
@@ -27,6 +26,9 @@ public class RepositorySummaryResponse {
     private String predictionStatus;
     private Integer contributors;
     private Integer openIssues;
+    private Integer commitCount;
+    private Integer pullRequests;
+    private Double buildSuccessRate;
     private LocalDateTime lastCommitDate;
     private LocalDateTime lastSyncDate;
     private String lifecycleStage;

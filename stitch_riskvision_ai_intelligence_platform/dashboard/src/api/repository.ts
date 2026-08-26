@@ -87,19 +87,19 @@ export const repositoryApi = {
 
   // ─── Sync ─────────────────────────────────────────────────────────────────────
   sync: async (id: string): Promise<SyncResponse> => {
-    const { data } = await apiClient.post<SyncResponse>(`${BASE}/${id}/sync`);
+    const { data } = await apiClient.post<SyncResponse>(`${BASE}/${id}/sync`, {}, { timeout: 180000 });
     return data;
   },
 
   // ─── Predict ──────────────────────────────────────────────────────────────────
   predict: async (id: string): Promise<PredictResponse> => {
-    const { data } = await apiClient.post<PredictResponse>(`${BASE}/${id}/predict`);
+    const { data } = await apiClient.post<PredictResponse>(`${BASE}/${id}/predict`, {}, { timeout: 180000 });
     return data;
   },
 
   // ─── Predict by GitHub URL (GitHub-native entry point) ────────────────────────
   predictByGithubUrl: async (githubUrl: string): Promise<GitHubPredictResponse> => {
-    const { data } = await apiClient.post<GitHubPredictResponse>(`${BASE}/predict-by-url`, { githubUrl });
+    const { data } = await apiClient.post<GitHubPredictResponse>(`${BASE}/predict-by-url`, { githubUrl }, { timeout: 180000 });
     return data;
   },
 
@@ -121,13 +121,37 @@ export const repositoryApi = {
     return data;
   },
 
-  // ─── Export ───────────────────────────────────────────────────────────────────
-  exportAll: async (status?: string, riskLevel?: string): Promise<PagedRepositoryResponse> => {
-    const params: Record<string, string | undefined> = {};
-    if (status) params.status = status;
-    if (riskLevel) params.riskLevel = riskLevel;
-    const { data } = await apiClient.get<PagedRepositoryResponse>(`${BASE}/export`, { params });
+  // ─── Prediction Debug ────────────────────────────────────────────────────────
+  getPredictionDebug: async (id: string): Promise<any> => {
+    const { data } = await apiClient.get(`${BASE}/${id}/prediction-debug`);
     return data;
+  },
+
+  // ─── Export ───────────────────────────────────────────────────────────────────
+  exportCsv: async (filters?: Partial<RepositoryFilters>): Promise<Blob> => {
+    try {
+      const params: Record<string, string | number | undefined> = {};
+      if (filters?.search) params.search = filters.search;
+      if (filters?.status) params.status = filters.status;
+      if (filters?.riskLevel) params.riskLevel = filters.riskLevel;
+      if (filters?.predictionStatus) params.predictionStatus = filters.predictionStatus;
+      if (filters?.gitProvider) params.gitProvider = filters.gitProvider;
+      if (filters?.language) params.language = filters.language;
+      if (filters?.organization) params.organization = filters.organization;
+
+      const { data } = await apiClient.get<Blob>(`${BASE}/export/csv`, {
+        params,
+        responseType: 'blob',
+      });
+      return data;
+    } catch (err: any) {
+      const msg = await parseBlobErrorMessage(err);
+      throw new Error(msg);
+    }
+  },
+
+  exportAll: async (status?: string, riskLevel?: string): Promise<Blob> => {
+    return repositoryApi.exportCsv({ status, riskLevel });
   },
 
   // ─── Validate Token (for wizard step 2) ───────────────────────────────────────

@@ -13,10 +13,22 @@ import java.util.UUID;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserEntity, UUID> {
-    Optional<UserEntity> findByEmail(String email);
-    Optional<UserEntity> findByUsername(String username);
-    Optional<UserEntity> findByResetToken(String resetToken);
-    Optional<UserEntity> findByGithubId(Long githubId);
+    Optional<UserEntity> findFirstByEmail(String email);
+    default Optional<UserEntity> findByEmail(String email) {
+        return findFirstByEmail(email);
+    }
+    Optional<UserEntity> findFirstByUsername(String username);
+    default Optional<UserEntity> findByUsername(String username) {
+        return findFirstByUsername(username);
+    }
+    Optional<UserEntity> findFirstByResetToken(String resetToken);
+    default Optional<UserEntity> findByResetToken(String resetToken) {
+        return findFirstByResetToken(resetToken);
+    }
+    Optional<UserEntity> findFirstByGithubId(Long githubId);
+    default Optional<UserEntity> findByGithubId(Long githubId) {
+        return findFirstByGithubId(githubId);
+    }
     boolean existsByEmail(String email);
     boolean existsByUsername(String username);
     boolean existsByGithubId(Long githubId);

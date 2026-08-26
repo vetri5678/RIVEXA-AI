@@ -53,13 +53,28 @@ public class CustomOAuth2AuthorizationRequestResolver implements OAuth2Authoriza
             ));
         }
 
-        // NOTE: GitHub does NOT support prompt=select_account (unlike Google/Microsoft).
-        // GitHub uses its own browser-side session cookie. When users want to switch GitHub
-        // accounts, they must do so from GitHub's own account switcher (github.com → avatar menu).
-        // RIVEXA logout clears RIVEXA session but does NOT clear GitHub's own browser session.
-        // This is the correct and expected OAuth2 behavior per GitHub's documentation.
+        // GitHub OAuth parameter resolution:
+        // GitHub supports prompt=consent to force re-authorization.
+        // GitHub does NOT support prompt=select_account (which causes GitHub's authorization endpoint
+        // to fail session state resolution and redirect to /sessions/verified-device returning 404).
         if ("github".equalsIgnoreCase(provider)) {
-            log.info("[STAGE 2: AUTHORIZATION_RESOLVER_INTERCEPT] GitHub OAuth request — using standard GitHub authorization flow (no prompt override).");
+            String promptReq = request.getParameter("prompt");
+            if ("select_account".equalsIgnoreCase(promptReq) || "true".equalsIgnoreCase(request.getParameter("force_prompt"))) {
+                log.info("[STAGE 2: AUTHORIZATION_RESOLVER_INTERCEPT] GitHub OAuth request — mapping prompt=select_account to prompt=consent for GitHub compatibility.");
+                OAuth2AuthorizationRequest.Builder builder = OAuth2AuthorizationRequest.from(authorizationRequest);
+                builder.additionalParameters(params -> params.put("prompt", "consent"));
+                return builder.build();
+            } else {
+                log.info("[STAGE 2: AUTHORIZATION_RESOLVER_INTERCEPT] GitHub OAuth request — using standard GitHub authorization flow.");
+            }
+        } else if ("google".equalsIgnoreCase(provider)) {
+            String promptReq = request.getParameter("prompt");
+            if (promptReq == null || "select_account".equalsIgnoreCase(promptReq)) {
+                log.info("[STAGE 2: AUTHORIZATION_RESOLVER_INTERCEPT] Google OAuth request — setting prompt=select_account.");
+                OAuth2AuthorizationRequest.Builder builder = OAuth2AuthorizationRequest.from(authorizationRequest);
+                builder.additionalParameters(params -> params.put("prompt", "select_account"));
+                return builder.build();
+            }
         }
 
         return authorizationRequest;

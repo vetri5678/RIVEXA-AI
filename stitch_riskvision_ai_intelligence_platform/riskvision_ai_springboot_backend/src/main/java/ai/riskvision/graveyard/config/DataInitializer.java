@@ -24,7 +24,7 @@ public class DataInitializer implements CommandLineRunner {
     private final TelemetryMetricsEntityRepository telemetryMetricsRepository;
     private final RiskMetricsEntityRepository riskMetricsRepository;
 
-    @org.springframework.beans.factory.annotation.Value("${app.admin.email:${spring.mail.username:admin@example.com}}")
+    @org.springframework.beans.factory.annotation.Value("${app.admin.email:${spring.mail.username:admin@rivexa.ai}}")
     private String adminEmailAddress;
 
     @org.springframework.beans.factory.annotation.Value("${app.admin.password:${ADMIN_PASSWORD:CHANGE_ME_ON_FIRST_LOGIN}}")
@@ -46,7 +46,7 @@ public class DataInitializer implements CommandLineRunner {
         // Ensure default ADMIN user exists
         String targetEmail = (adminEmailAddress != null && !adminEmailAddress.trim().isEmpty())
                 ? adminEmailAddress.trim().toLowerCase()
-                : "admin@example.com";
+                : "admin@rivexa.ai";
 
         String initialPass = (adminPassword != null && !adminPassword.trim().isEmpty()) ? adminPassword.trim() : "AdminPass123!";
         UserEntity adminUser = userRepository.findByEmail(targetEmail).orElseGet(() ->

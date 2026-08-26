@@ -6,21 +6,23 @@ import { useMLVersion } from '../../hooks/useMLPrediction';
 import { getStoredUser, getUserRoleDisplay } from '../../utils/auth';
 
 interface TopBarProps {
-  onSearchChange: (val: string) => void;
-  searchValue: string;
+  onSearchChange?: (val: string) => void;
+  searchValue?: string;
   onOpenNotifications: () => void;
   onQuickAction: (action: string) => void;
   collapsed?: boolean;
   onToggleMobileMenu?: () => void;
+  onOpenSearchModal?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
-  onSearchChange,
-  searchValue,
+  onSearchChange: _onSearchChange,
+  searchValue = '',
   onOpenNotifications,
   onQuickAction,
   collapsed = false,
   onToggleMobileMenu,
+  onOpenSearchModal,
 }) => {
   const { data: alerts } = useAlerts();
   const { data: mlVersion } = useMLVersion();
@@ -62,16 +64,21 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
-        <div className="relative flex-1">
+        <div
+          onClick={onOpenSearchModal}
+          className="relative flex-1 cursor-pointer"
+        >
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
             <Search size={14} />
           </span>
           <input
             type="text"
+            readOnly
             value={searchValue}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search..."
-            className="w-full pl-8 sm:pl-9 pr-8 sm:pr-12 py-1.5 sm:py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 focus:bg-white/[0.06] transition-all duration-200"
+            onClick={onOpenSearchModal}
+            onFocus={onOpenSearchModal}
+            placeholder="Search... (⌘ K)"
+            className="w-full pl-8 sm:pl-9 pr-8 sm:pr-12 py-1.5 sm:py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-xs text-slate-100 placeholder-slate-500 cursor-pointer focus:outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 focus:bg-white/[0.06] transition-all duration-200"
           />
           <div className="absolute inset-y-0 right-0 hidden sm:flex items-center pr-3 pointer-events-none">
             <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 bg-white/[0.08] border border-white/[0.1] rounded">

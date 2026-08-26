@@ -31,6 +31,9 @@ public class RepoPredictionService {
     private final RepositoryEntityRepository repoRepository;
     private final RepositoryPredictionEntityRepository predictionRepository;
     private final RepositoryMetricsEntityRepository metricsRepository;
+    private final CodeFindingRepository findingRepository;
+    private final CodeFileAnalysisRepository fileAnalysisRepository;
+    private final CodeAnalysisRunRepository runRepository;
     private final RepositorySyncService syncService;
     private final ObjectMapper objectMapper;
     private final OpenRouterService openRouterService;
@@ -46,15 +49,16 @@ public class RepoPredictionService {
     /**
      * Runs an AI prediction for the given repository.
      * Computes failure probability by calling the Python FastAPI ML Service.
-     * Requires live ML Service response — no silent heuristic fallback.
+     * Executes external network requests OUTSIDE of active database transactions
+     * to prevent PostgreSQL socket timeouts and connection pool exhaustion.
      */
-    @Transactional
     public RepositoryPredictionEntity runPrediction(UUID repositoryId, String actor) {
         if (repositoryId == null) {
             throw new IllegalArgumentException("Repository ID must not be null");
         }
         log.info("[RepoPredictionService] Starting prediction for repositoryId={} actor={}", repositoryId, actor);
 
+        // Stage 1: Load initial repository state
         RepositoryEntity entity = repoRepository.findById(repositoryId)
                 .orElseThrow(() -> {
                     log.warn("[RepoPredictionService] Repository not found in database: {}", repositoryId);
@@ -64,7 +68,7 @@ public class RepoPredictionService {
         log.debug("[RepoPredictionService] Repository loaded: name={} status={} lifecycleStage={}",
                 entity.getRepositoryName(), entity.getStatus(), entity.getLifecycleStage());
 
-        // Ensure live metrics and metadata are fresh before generating prediction
+        // Stage 2: External GitHub Sync (executes outside long DB transaction)
         try {
             syncService.syncRepository(repositoryId, actor);
             entity = repoRepository.findById(repositoryId).orElse(entity);
@@ -77,7 +81,7 @@ public class RepoPredictionService {
         String riskLevel = "LOW";
         String featureJson = null;
         String recommendationsJson = null;
-        String modelVersion = "xgboost-v1.0";
+        String modelVersion = "xgboost-v2.4";
 
         ai.riskvision.graveyard.entity.RepositoryMetricsEntity metrics = metricsRepository.findByRepositoryId(repositoryId).orElse(null);
 
@@ -89,24 +93,29 @@ public class RepoPredictionService {
         double mergedPrs = metrics != null && metrics.getMergedPullRequests() != null ? (double) metrics.getMergedPullRequests() : Math.max(1.0, prs * 0.7);
         double failedPrs = metrics != null && metrics.getFailedPullRequests() != null ? (double) metrics.getFailedPullRequests() : Math.max(0.0, prs * 0.1);
         double inactiveDays = metrics != null && metrics.getInactiveDays() != null ? (double) metrics.getInactiveDays() : 5.0;
-        double buildSuccess = metrics != null && metrics.getBuildSuccessRate() != null ? metrics.getBuildSuccessRate() : 90.0;
+        double buildSuccess = metrics != null && metrics.getBuildSuccessRate() != null ? metrics.getBuildSuccessRate() : 85.0;
+        double loc = Math.max(100.0, (commits * 250.0) + (prs * 400.0) + (openIssues * 50.0));
 
+        // Stage 3: External FastAPI ML Service Prediction (NO active DB transaction held open)
         try {
             String url = mlServiceUrl + "/api/v1/pipeline/predict";
             log.info("[RepoPredictionService] Calling FastAPI ML service — url={} repositoryId={} repoName={}", url, repositoryId, entity.getRepositoryName());
 
-            // Compute unique repository-specific feature vector
-            double budget = 50000.0 + Math.abs(entity.getRepositoryName().hashCode() % 450000) + (commits * 500.0);
+            double budget = Math.max(10000.0, (loc * 35.0) + (commits * 200.0));
             double teamSize = activeDevs;
-            double actualCost = budget * (0.8 + (inactiveDays > 30 ? 0.4 : 0.1) + (openIssues > 20 ? 0.25 : 0.0));
-            double timelineMonths = Math.max(3.0, (commits / 20.0) + (prs / 5.0));
-            double actualDuration = timelineMonths * (buildSuccess < 75.0 ? 1.4 : 0.9);
+            double actualCost = budget * (0.85 + (inactiveDays > 30 ? 0.35 : 0.05) + (openIssues > 15 ? 0.20 : 0.0));
+            double timelineMonths = Math.max(1.0, (loc / 5000.0) + (prs / 10.0) + (commits / 30.0));
+            double actualDuration = timelineMonths * (buildSuccess < 80.0 ? 1.35 : 0.95);
             String statusStr = (entity.getStatus() != null) ? entity.getStatus().toLowerCase() : "active";
             double totalRequirements = Math.max(10.0, prs * 2.0 + openIssues * 0.5 + 5.0);
             double featuresDelivered = Math.max(1.0, mergedPrs * 1.8 + 2.0);
             double requirementsChanged = Math.max(0.0, failedPrs * 2.0 + (openIssues > 10 ? 5.0 : 1.0));
             double identifiedRisks = openIssues;
             double totalTasks = Math.max(20.0, commits * 1.2 + prs * 3.0 + openIssues);
+
+            double codeCoverage = metrics != null && metrics.getCodeCoverage() != null ? metrics.getCodeCoverage() : 75.0;
+            double techDebt = metrics != null && metrics.getTechnicalDebt() != null ? metrics.getTechnicalDebt() : 0.0;
+            double docScore = metrics != null && metrics.getDocumentationScore() != null ? metrics.getDocumentationScore() : 80.0;
 
             Map<String, Object> request = new HashMap<>();
             request.put("project_id", repositoryId.toString());
@@ -123,16 +132,16 @@ public class RepoPredictionService {
             request.put("identified_risks", identifiedRisks);
             request.put("total_tasks", totalTasks);
 
-            // Add missing model features
+            // Add model feature columns to match the 22 feature schema
             request.put("open_issues", openIssues);
             request.put("critical_bugs", (double) (metrics != null ? Math.max(0.0, openIssues * 0.1) : 0.0));
-            request.put("code_coverage", metrics != null && metrics.getCodeCoverage() != null ? metrics.getCodeCoverage() : 75.0);
-            request.put("technical_debt", metrics != null && metrics.getTechnicalDebt() != null ? metrics.getTechnicalDebt() : 0.0);
+            request.put("code_coverage", codeCoverage);
+            request.put("technical_debt", techDebt);
             request.put("security_vulnerabilities", identifiedRisks);
-            request.put("dependency_vulnerabilities", (double) (metrics != null ? 3.0 : 0.0));
-            request.put("repository_health", metrics != null && metrics.getDocumentationScore() != null ? metrics.getDocumentationScore() : 80.0);
-            request.put("build_failures", (double) (metrics != null && metrics.getFailedPullRequests() != null ? metrics.getFailedPullRequests() : 0.0));
-            request.put("deployment_failures", (double) (metrics != null && metrics.getFailedPullRequests() != null ? Math.max(0.0, metrics.getFailedPullRequests() * 0.2) : 0.0));
+            request.put("dependency_vulnerabilities", (double) (metrics != null ? Math.max(0.0, openIssues * 0.05) : 0.0));
+            request.put("repository_health", docScore);
+            request.put("build_failures", failedPrs);
+            request.put("deployment_failures", (double) Math.max(0.0, failedPrs * 0.2));
             request.put("requirement_changes", requirementsChanged);
             request.put("customer_satisfaction", 4.0);
             request.put("priority", entity.getRiskLevel() != null ? entity.getRiskLevel() : "MEDIUM");
@@ -140,8 +149,8 @@ public class RepoPredictionService {
             request.put("project_type", entity.getProjectType() != null ? entity.getProjectType() : "Web");
             request.put("developer_experience", 5.0);
 
-            log.info("[RepoPredictionService] Feature Vector: project_id={} budget={} cost={} timeline={} duration={} risks={} tasks={}",
-                    repositoryId, budget, actualCost, timelineMonths, actualDuration, identifiedRisks, totalTasks);
+            log.info("[RepoPredictionService] Feature Vector: project_id={} loc={} budget={} cost={} timeline={} duration={} risks={} tasks={}",
+                    repositoryId, loc, budget, actualCost, timelineMonths, actualDuration, identifiedRisks, totalTasks);
 
             ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(
                     url,
@@ -156,8 +165,11 @@ public class RepoPredictionService {
                 }
                 if (response.containsKey("confidence_level") && response.get("confidence_level") != null) {
                     confidence = ((Number) response.get("confidence_level")).doubleValue();
+                    if (confidence <= 1.0) {
+                        confidence = confidence * 100.0;
+                    }
                 } else if (response.containsKey("confidence") && response.get("confidence") != null) {
-                    confidence = ((Number) response.get("confidence")).doubleValue() / 100.0;
+                    confidence = ((Number) response.get("confidence")).doubleValue();
                 }
                 if (response.containsKey("risk_category") && response.get("risk_category") != null) {
                     riskLevel = (String) response.get("risk_category");
@@ -189,7 +201,7 @@ public class RepoPredictionService {
                 if (response.containsKey("model_version") && response.get("model_version") != null) {
                     modelVersion = String.valueOf(response.get("model_version"));
                 } else {
-                    modelVersion = "xgboost-v1.0";
+                    modelVersion = "xgboost-v2.4";
                 }
 
                 log.info("[RepoPredictionService] ML Prediction succeeded — repositoryId={} failureProbability={} riskLevel={} modelVersion={}",
@@ -200,21 +212,27 @@ public class RepoPredictionService {
         } catch (org.springframework.web.client.HttpStatusCodeException ex) {
             log.error("[RepoPredictionService] FastAPI ML Service returned error status={} body={} error={}",
                     ex.getStatusCode(), ex.getResponseBodyAsString(), ex.getMessage(), ex);
-            entity.setPredictionStatus("FAILED");
-            repoRepository.save(entity);
+            markPredictionFailed(repositoryId);
             throw new IllegalStateException("Prediction model unavailable. Real repository data was collected, but prediction could not be completed: " + ex.getStatusCode() + " - " + ex.getResponseBodyAsString(), ex);
         } catch (Exception e) {
             log.error("[RepoPredictionService] FastAPI ML Service failure at {} for repositoryId={} — error: {}",
                     mlServiceUrl, repositoryId, e.getMessage(), e);
-            entity.setPredictionStatus("FAILED");
-            repoRepository.save(entity);
+            markPredictionFailed(repositoryId);
             throw new IllegalStateException("Prediction model unavailable. Real repository data was collected, but prediction could not be completed: " + e.getMessage(), e);
         }
 
-        int riskScore = (int) Math.round(failureProb * 100);
-        double healthScore = Math.max(0, 100.0 - (failureProb * 100.0));
+        int riskScore = (int) Math.round(failureProb * 100.0);
+        riskScore = Math.max(0, Math.min(100, riskScore));
+        double healthScore = Math.max(0.0, Math.round((100.0 - riskScore) * 10.0) / 10.0);
 
-        // Generate dynamic recommendations using OpenRouter LLM (or fallback if it fails)
+        if (riskLevel == null || riskLevel.isBlank() || "UNKNOWN".equalsIgnoreCase(riskLevel)) {
+            if (riskScore < 25) riskLevel = "LOW";
+            else if (riskScore < 50) riskLevel = "MEDIUM";
+            else if (riskScore < 75) riskLevel = "HIGH";
+            else riskLevel = "CRITICAL";
+        }
+
+        // Stage 4: External OpenRouter LLM AI Recommendations (NO active DB transaction held open)
         try {
             recommendationsJson = generateRecommendationsWithAI(entity, metrics, riskScore, riskLevel, failureProb, featureJson);
         } catch (Exception ex) {
@@ -222,7 +240,83 @@ public class RepoPredictionService {
             recommendationsJson = generateFallbackRecommendations(entity, metrics, riskScore, riskLevel, failureProb, featureJson);
         }
 
-        // Persist prediction record
+        // Stage 5: Short Transactional Database Persistence with Transient Retry
+        RepositoryPredictionEntity prediction = persistPredictionWithRetry(
+                repositoryId, failureProb, riskScore, riskLevel,
+                confidence, healthScore, modelVersion,
+                featureJson, recommendationsJson, actor
+        );
+
+        log.info("Prediction completed for repository {} — risk={}, prob={}", repositoryId, riskLevel, failureProb);
+        return prediction;
+    }
+
+    /**
+     * Persists prediction record and executes targeted repository updates inside a short transaction,
+     * retrying automatically on transient database I/O failures.
+     */
+    public RepositoryPredictionEntity persistPredictionWithRetry(
+            UUID repositoryId,
+            double failureProb,
+            int riskScore,
+            String riskLevel,
+            double confidence,
+            double healthScore,
+            String modelVersion,
+            String featureJson,
+            String recommendationsJson,
+            String actor) {
+
+        int maxAttempts = 3;
+        long backoffMs = 100;
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return persistPredictionResult(
+                        repositoryId, failureProb, riskScore, riskLevel,
+                        confidence, healthScore, modelVersion,
+                        featureJson, recommendationsJson, actor
+                );
+            } catch (Exception ex) {
+                lastException = ex;
+                if (isTransientDatabaseError(ex) && attempt < maxAttempts) {
+                    log.warn("[RepoPredictionService] Transient DB persistence failure (attempt {}/{}): {}. Retrying in {}ms...",
+                            attempt, maxAttempts, ex.getMessage(), backoffMs);
+                    try {
+                        Thread.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    backoffMs *= 5;
+                } else {
+                    log.error("[RepoPredictionService] Database persistence failed for repositoryId={} on attempt {}/{}: {}",
+                            repositoryId, attempt, maxAttempts, ex.getMessage(), ex);
+                    break;
+                }
+            }
+        }
+        throw new IllegalStateException("Prediction persistence failed after " + maxAttempts + " attempts: " +
+                (lastException != null ? lastException.getMessage() : "Unknown error"), lastException);
+    }
+
+    /**
+     * Short transactional operation to write prediction record and update prediction columns.
+     */
+    @Transactional
+    public RepositoryPredictionEntity persistPredictionResult(
+            UUID repositoryId,
+            double failureProb,
+            int riskScore,
+            String riskLevel,
+            double confidence,
+            double healthScore,
+            String modelVersion,
+            String featureJson,
+            String recommendationsJson,
+            String actor) {
+
         RepositoryPredictionEntity prediction = RepositoryPredictionEntity.builder()
                 .repositoryId(repositoryId)
                 .failureProbability(failureProb)
@@ -239,20 +333,43 @@ public class RepoPredictionService {
 
         prediction = predictionRepository.save(prediction);
 
-        // Update repository with latest prediction result
-        entity.setFailureProbability(failureProb);
-        entity.setHealthScore(healthScore);
-        entity.setRiskLevel(riskLevel);
-        entity.setAiConfidence(confidence);
-        entity.setPredictionStatus("COMPLETED");
-        repoRepository.save(entity);
+        // Targeted update — modifies ONLY prediction fields, preserving auth_token_hint & webhook_secret
+        repoRepository.updatePredictionResults(
+                repositoryId, failureProb, healthScore, riskLevel, confidence, "COMPLETED"
+        );
 
-        syncService.logActivity(repositoryId, "AI_PREDICTION_RUN",
-                "AI prediction completed — Failure probability: " + String.format("%.1f", failureProb * 100) + "%, Risk: " + riskLevel,
-                actor, "PREDICTION", "INFO");
+        try {
+            syncService.logActivity(repositoryId, "AI_PREDICTION_RUN",
+                    "AI prediction completed — Failure probability: " + String.format("%.1f", failureProb * 100) + "%, Risk: " + riskLevel,
+                    actor, "PREDICTION", "INFO");
+        } catch (Exception ex) {
+            log.warn("[RepoPredictionService] Failed to log activity for repositoryId={}: {}", repositoryId, ex.getMessage());
+        }
 
-        log.info("Prediction completed for repository {} — risk={}, prob={}", repositoryId, riskLevel, failureProb);
         return prediction;
+    }
+
+    /**
+     * Updates repository prediction status to FAILED in a short isolated transaction.
+     */
+    @Transactional
+    public void markPredictionFailed(UUID repositoryId) {
+        try {
+            repoRepository.updatePredictionResults(repositoryId, 0.0, 0.0, "UNKNOWN", 0.0, "FAILED");
+        } catch (Exception ex) {
+            log.warn("[RepoPredictionService] Could not update status to FAILED for repositoryId={}: {}", repositoryId, ex.getMessage());
+        }
+    }
+
+    private boolean isTransientDatabaseError(Throwable ex) {
+        if (ex == null) return false;
+        String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        if (msg.contains("i/o error") || msg.contains("connection reset") || msg.contains("broken pipe")
+                || msg.contains("socketexception") || msg.contains("connection is closed")
+                || msg.contains("psqlexception") || msg.contains("hikari") || msg.contains("timeout")) {
+            return true;
+        }
+        return isTransientDatabaseError(ex.getCause());
     }
 
     /**
@@ -274,6 +391,26 @@ public class RepoPredictionService {
                 "You must output ONLY a valid JSON object matching the exact requested schema. Do not include markdown blocks like ```json or any other text before/after the JSON. " +
                 "Do not invent any repository metrics. If a metric value is not provided in the input, do not mention it.";
 
+        StringBuilder findingsContext = new StringBuilder();
+        if (runRepository != null && findingRepository != null) {
+            runRepository.findTopByRepositoryIdOrderByCreatedAtDesc(entity.getId()).ifPresent(run -> {
+                List<CodeFindingEntity> findings = findingRepository.findByAnalysisRunId(run.getId());
+                if (!findings.isEmpty()) {
+                    findingsContext.append("\nDetected Source Code Findings:\n");
+                    int count = 0;
+                    for (CodeFindingEntity f : findings) {
+                        if (count++ >= 5) break;
+                        String fPath = "Source Code";
+                        if (fileAnalysisRepository != null && f.getFileAnalysisId() != null) {
+                            fPath = fileAnalysisRepository.findById(f.getFileAnalysisId()).map(CodeFileAnalysisEntity::getFilePath).orElse("Source Code");
+                        }
+                        findingsContext.append(String.format("- [%s] %s (File: %s, Line: %d, Symbol: %s, Evidence: %s)\n",
+                                f.getSeverity(), f.getTitle(), fPath, f.getStartLine(), f.getSymbolName(), f.getEvidence()));
+                    }
+                }
+            });
+        }
+
         String userPrompt = String.format(
                 "Generate a project status improvement plan for the software repository '%s'.\n\n" +
                 "Repository Details:\n" +
@@ -292,8 +429,8 @@ public class RepoPredictionService {
                 "- Overall Risk Score: %d/100\n" +
                 "- Risk Level Category: %s\n" +
                 "- Failure Probability: %.1f%%\n" +
-                "- Top Risk Factors (SHAP feature impact): %s\n\n" +
-                "Generate a JSON object matching this schema. Focus on the actual high-impact risk factors from the XGBoost model outputs:\n" +
+                "- Top Risk Factors (SHAP feature impact): %s\n%s\n" +
+                "Generate a JSON object matching this schema. Focus on the actual high-impact risk factors from the XGBoost model outputs and specific source code findings:\n" +
                 "{\n" +
                 "  \"recommendations\": [\n" +
                 "     {\n" +
@@ -333,7 +470,8 @@ public class RepoPredictionService {
                 riskScore,
                 riskLevel,
                 failureProb * 100,
-                featureJson
+                featureJson,
+                findingsContext.toString()
         );
 
         String rawResponse = openRouterService.getChatCompletion(systemPrompt, userPrompt);
@@ -368,6 +506,28 @@ public class RepoPredictionService {
 
             List<Map<String, Object>> recs = new ArrayList<>();
             int totalEstimatedReduction = 0;
+
+            // 0. Inject actual AST & static findings from analyzed repository code
+            if (runRepository != null && findingRepository != null) {
+                runRepository.findTopByRepositoryIdOrderByCreatedAtDesc(entity.getId()).ifPresent(run -> {
+                    List<CodeFindingEntity> findings = findingRepository.findByAnalysisRunId(run.getId());
+                    int maxFindings = Math.min(3, findings.size());
+                    for (int i = 0; i < maxFindings; i++) {
+                        CodeFindingEntity f = findings.get(i);
+                        Map<String, Object> rec = new LinkedHashMap<>();
+                        rec.put("title", ("CRITICAL".equalsIgnoreCase(f.getSeverity()) ? "🔴 P0 — " : "🟠 P1 — ") + f.getTitle());
+                        rec.put("risk_detected", f.getFindingType() + " in " + (f.getSymbolName() != null ? f.getSymbolName() : "Source Code"));
+                        rec.put("current_condition", f.getDescription() + " (Evidence: " + f.getEvidence() + ")");
+                        rec.put("recommended_action", f.getRecommendation() != null ? f.getRecommendation() : "Refactor code to fix security/quality issue.");
+                        rec.put("why_it_matters", "Direct source code flaw identified during CodeVision AST static scanning.");
+                        rec.put("expected_impact", f.getSeverity());
+                        rec.put("estimated_risk_reduction", "-10 points");
+                        rec.put("implementation_effort", "Medium");
+                        rec.put("suggested_priority", "CRITICAL".equalsIgnoreCase(f.getSeverity()) ? "P0 — Immediate" : "P1 — High");
+                        recs.add(rec);
+                    }
+                });
+            }
 
             // 1. Inactive Days / Low activity
             if (inactiveDays > 14) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import authApi from '../api/auth';
+import { getConnectGitHubUrl } from '../utils/auth';
 import { useGithubConnectionStatus, useDisconnectGithub } from '../hooks/useRepository';
 import GitHubDisconnectModal from '../components/common/GitHubDisconnectModal';
 import type { UserResponse } from '../api/auth';
@@ -118,10 +119,17 @@ export const Profile: React.FC = () => {
   const [isGithubDisconnectModalOpen, setIsGithubDisconnectModalOpen] = useState(false);
 
   const handleConnectProvider = (provider: 'google' | 'github') => {
-    const backendUrl = (import.meta as any).env?.VITE_SPRINGBOOT_URL || '';
-    const emailParam = user?.email ? `?user_email=${encodeURIComponent(user.email)}` : '';
-    window.location.href = `${backendUrl}/oauth2/authorization/${provider}${emailParam}`;
+    if (provider === 'github') {
+      window.location.href = getConnectGitHubUrl();
+    } else {
+      const backendUrl = (import.meta as any).env?.VITE_SPRINGBOOT_URL || '';
+      window.location.href = `${backendUrl}/oauth2/authorization/google`;
+    }
   };
+
+  const isGithubConnected = githubConnectionStatus?.connected ?? false;
+  const githubUsername = githubConnectionStatus?.githubUsername;
+  const isGoogleConnected = user?.provider === 'google' || (user?.connected_accounts && user.connected_accounts.includes('google'));
 
   const handleOpenDisconnectModal = (provider: string) => {
     if (provider === 'github') {
@@ -133,16 +141,15 @@ export const Profile: React.FC = () => {
 
   const handleConfirmDisconnectGithub = async () => {
     setMessage(null);
+    setIsGithubDisconnectModalOpen(false);
     try {
       await disconnectGithubMutation.mutateAsync();
-      // Synchronize profile data locally
       if (user && user.connected_accounts) {
         const updatedAccounts = user.connected_accounts.filter((a) => a !== 'github');
         const updatedUser = { ...user, connected_accounts: updatedAccounts };
         setUser(updatedUser);
         localStorage.setItem('rv_user', JSON.stringify(updatedUser));
       }
-      setIsGithubDisconnectModalOpen(false);
       setMessage({ type: 'success', text: 'GitHub account disconnected successfully.' });
     } catch (err: any) {
       console.error('[Profile] GitHub disconnect error:', err);
@@ -182,13 +189,6 @@ export const Profile: React.FC = () => {
       </div>
     );
   }
-
-  const isProviderConnected = (prov: string) => {
-    if (prov === 'github') {
-      return githubConnectionStatus?.connected === true;
-    }
-    return user?.connected_accounts?.includes(prov) || false;
-  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 font-sans">
@@ -428,11 +428,11 @@ export const Profile: React.FC = () => {
                   <div>
                     <h4 className="text-xs font-bold text-slate-200">Google Account</h4>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      {isProviderConnected('google') ? 'Connected and synchronized' : 'Not connected'}
+                      {isGoogleConnected ? 'Authenticated application login' : 'Not connected'}
                     </p>
                   </div>
                 </div>
-                {isProviderConnected('google') ? (
+                {isGoogleConnected ? (
                   <button
                     onClick={() => handleOpenDisconnectModal('google')}
                     className="btn-danger text-xs py-1.5 px-3 rounded-lg cursor-pointer"
@@ -454,13 +454,13 @@ export const Profile: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <GithubIcon />
                   <div>
-                    <h4 className="text-xs font-bold text-slate-200">GitHub Account</h4>
+                    <h4 className="text-xs font-bold text-slate-200">GitHub Integration</h4>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      {isProviderConnected('github') ? 'Connected and synchronized' : 'Not connected'}
+                      {isGithubConnected ? `Connected as @${githubUsername || 'user'}` : 'Status: Not Connected'}
                     </p>
                   </div>
                 </div>
-                {isProviderConnected('github') ? (
+                {isGithubConnected ? (
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleConnectProvider('github')}
@@ -482,7 +482,7 @@ export const Profile: React.FC = () => {
                     onClick={() => handleConnectProvider('github')}
                     className="btn-secondary text-xs py-1.5 px-3 rounded-lg cursor-pointer"
                   >
-                    Connect
+                    Connect GitHub
                   </button>
                 )}
               </div>

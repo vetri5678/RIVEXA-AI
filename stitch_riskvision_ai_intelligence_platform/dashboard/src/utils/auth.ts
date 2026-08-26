@@ -80,6 +80,43 @@ export const isAdminUser = (user?: UserInfo | null): boolean => {
 };
 
 /**
+ * Purge all user authentication, integration, and cached identity storage and cookies.
+ */
+export const clearAuthStorageAndCookies = () => {
+  // Purge local storage
+  const keysToRemove = [
+    'rv_access_token',
+    'rv_refresh_token',
+    'rv_user',
+    'rivexa_user',
+    'rivexa_token',
+    'access_token',
+    'user',
+    'githubUser',
+    'github_username',
+    'githubToken',
+    'githubAccessToken',
+    'githubProfile',
+    'githubRepos',
+    'repositories',
+    'oauthUser',
+  ];
+  keysToRemove.forEach((k) => {
+    localStorage.removeItem(k);
+    sessionStorage.removeItem(k);
+  });
+
+  sessionStorage.removeItem('rv_toast_msg');
+  sessionStorage.removeItem('rv_toast_type');
+
+  // Delete cookies
+  const cookiesToDelete = ['rivexa_initiating_user', 'oauth2_auth_request', 'redirect_uri'];
+  cookiesToDelete.forEach((c) => {
+    document.cookie = `${c}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+  });
+};
+
+/**
  * Get normalized uppercase role string for UI badge display.
  */
 export const getUserRoleDisplay = (user?: UserInfo | null): string => {

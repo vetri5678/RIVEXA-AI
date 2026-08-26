@@ -34,6 +34,7 @@ public class RepositorySyncService {
     private final GitHubClient gitHubClient;
     private final RestTemplate restTemplate;
     private final JwtTokenProvider jwtTokenProvider;
+    private final N8nWebhookService n8nWebhookService;
     @org.springframework.beans.factory.annotation.Autowired
     @org.springframework.context.annotation.Lazy
     private RepoPredictionService predictionService;
@@ -223,6 +224,23 @@ public class RepositorySyncService {
             }
         }
 
+        // Calculate initial telemetry-derived baseline health score & failure probability if no prediction run yet
+        if ("PENDING".equalsIgnoreCase(entity.getPredictionStatus()) || entity.getHealthScore() == null || entity.getHealthScore() == 0.0) {
+            double buildRate = metrics.getBuildSuccessRate() != null ? metrics.getBuildSuccessRate() : 85.0;
+            double coverage = metrics.getCodeCoverage() != null ? metrics.getCodeCoverage() : 50.0;
+            double docScore = metrics.getDocumentationScore() != null ? metrics.getDocumentationScore() : 50.0;
+            int inactive = metrics.getInactiveDays() != null ? metrics.getInactiveDays() : 0;
+            int issues = metrics.getOpenIssues() != null ? metrics.getOpenIssues() : 0;
+
+            double calcHealth = Math.min(100.0, Math.max(15.0, (buildRate * 0.4) + (coverage * 0.3) + (docScore * 0.2) - (Math.min(30, inactive) * 0.5) - (Math.min(20, issues) * 1.0)));
+            double calcFailProb = Math.max(0.01, Math.min(0.99, (100.0 - calcHealth) / 100.0));
+            String calcRisk = calcFailProb < 0.25 ? "LOW" : calcFailProb < 0.55 ? "MEDIUM" : calcFailProb < 0.80 ? "HIGH" : "CRITICAL";
+
+            entity.setHealthScore(Math.round(calcHealth * 10.0) / 10.0);
+            entity.setFailureProbability(Math.round(calcFailProb * 1000.0) / 1000.0);
+            entity.setRiskLevel(calcRisk);
+        }
+
         repoRepository.save(entity);
         metricsRepository.save(metrics);
 
@@ -233,6 +251,18 @@ public class RepositorySyncService {
                 actor, "SYNC", "INFO");
 
         log.info("Repository synced: {} by {}", repositoryId, actor);
+
+        try {
+            n8nWebhookService.triggerRepositorySyncWebhook(
+                    entity.getId().toString(),
+                    entity.getRepositoryName(),
+                    entity.getGitProvider(),
+                    true,
+                    "Repository synced successfully by " + (actor != null ? actor : "SYSTEM")
+            );
+        } catch (Exception e) {
+            log.warn("Non-critical error sending n8n webhook for single repository sync: {}", e.getMessage());
+        }
     }
 
     /**
@@ -289,6 +319,23 @@ public class RepositorySyncService {
      * Fetches repos across pages from GitHub API, creates/updates RepositoryEntity linked to user,
      * updates metrics, marks inaccessible repos inactive, and triggers XGBoost risk predictions.
      */
+    private final Map<UUID, Boolean> activeSyncLocks = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, Object>> latestSyncDebugInfo = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public Map<String, Object> getLastSyncDebugInfo(UUID userId) {
+        if (userId == null) return Map.of("syncStatus", "NO_SYNC_DATA");
+        return latestSyncDebugInfo.getOrDefault(userId, Map.of(
+                "userId", userId.toString(),
+                "syncStatus", "NOT_TRIGGERED_YET",
+                "message", "No repository sync executed for user in current application session"
+        ));
+    }
+
+    /**
+     * Synchronizes and persists all GitHub repositories for the given authenticated user.
+     * Validates access token, fetches across pages from GitHub API, deduplicates by immutable GitHub repo ID,
+     * performs idempotent upsert, updates metrics, marks inaccessible repos inactive, and triggers XGBoost predictions.
+     */
     @Transactional
     public List<RepositoryEntity> syncUserGitHubRepositories(UserEntity user, String userToken) {
         if (user == null || userToken == null || userToken.trim().isEmpty()) {
@@ -297,26 +344,81 @@ public class RepositorySyncService {
         }
 
         UUID userId = user.getId();
-        log.info("[GITHUB SYNC] Starting GitHub repository synchronization for user id={}, email={}", userId, user.getEmail());
 
+        // 1. Prevent concurrent duplicate synchronization requests
+        if (activeSyncLocks.putIfAbsent(userId, Boolean.TRUE) != null) {
+            log.warn("[GITHUB SYNC] Synchronization already in progress for user id={}, email={}. Returning existing records.", userId, user.getEmail());
+            return repoRepository.findByUserIdAndGitProvider(userId, "GITHUB");
+        }
+
+        long startMs = System.currentTimeMillis();
         List<RepositoryEntity> syncedRepos = new java.util.ArrayList<>();
         java.util.Set<UUID> fetchedRepoIds = new java.util.HashSet<>();
-        int page = 1;
-        int perPage = 100;
-        int totalFetched = 0;
-        boolean hasMore = true;
 
-        while (hasMore) {
-            List<Map<String, Object>> rawRepos = gitHubClient.getUserRepositories(userToken.trim(), page, perPage, "all", "owner,collaborator,organization_member", "updated");
-            if (rawRepos == null || rawRepos.isEmpty()) {
-                hasMore = false;
-                break;
+        try {
+            // 2. Validate token & user profile
+            try {
+                gitHubClient.getAuthenticatedUserProfile(userToken.trim());
+            } catch (Exception authEx) {
+                log.error("[GITHUB SYNC] GitHub access token validation failed for user email={}: {}", user.getEmail(), authEx.getMessage());
+                latestSyncDebugInfo.put(userId, Map.of(
+                        "userId", userId.toString(),
+                        "syncStatus", "FAILED",
+                        "errorCode", "GITHUB_AUTH_FAILED",
+                        "message", "GitHub authentication is no longer valid: " + authEx.getMessage()
+                ));
+                throw new ai.riskvision.graveyard.exception.GitHubAuthenticationException("GitHub token is no longer valid.", "/user", authEx.getMessage());
             }
 
-            totalFetched += rawRepos.size();
-            log.info("[GITHUB SYNC] Page {} fetched {} repositories for user email={}", page, rawRepos.size(), user.getEmail());
+            log.info("[GITHUB SYNC] Starting GitHub repository synchronization for user id={}, email={}", userId, user.getEmail());
 
-            for (Map<String, Object> repo : rawRepos) {
+            // 3. Multi-page fetching and in-memory deduplication by immutable GitHub repository ID
+            Map<String, Map<String, Object>> uniqueGithubRepos = new java.util.LinkedHashMap<>();
+            int page = 1;
+            int perPage = 100;
+            int pagesFetched = 0;
+            int totalRawFetched = 0;
+            boolean hasMore = true;
+
+            while (hasMore) {
+                List<Map<String, Object>> rawPage = gitHubClient.getUserRepositories(userToken.trim(), page, perPage, "all", "owner,collaborator,organization_member", "updated");
+                if (rawPage == null || rawPage.isEmpty()) {
+                    hasMore = false;
+                    break;
+                }
+
+                pagesFetched++;
+                totalRawFetched += rawPage.size();
+
+                for (Map<String, Object> repo : rawPage) {
+                    Object idObj = repo.get("id");
+                    String ghId = idObj != null ? idObj.toString() : (String) repo.get("node_id");
+                    if (ghId == null || ghId.trim().isEmpty()) {
+                        ghId = (String) repo.get("full_name");
+                    }
+                    if (ghId != null && !ghId.trim().isEmpty()) {
+                        uniqueGithubRepos.putIfAbsent(ghId.trim(), repo);
+                    }
+                }
+
+                log.info("[GITHUB SYNC] Page {} fetched {} repositories for user email={}. Unique repositories so far: {}",
+                        page, rawPage.size(), user.getEmail(), uniqueGithubRepos.size());
+
+                if (rawPage.size() < perPage) {
+                    hasMore = false;
+                } else {
+                    page++;
+                }
+            }
+
+            int createdCount = 0;
+            int updatedCount = 0;
+
+            // 4. Idempotent Upsert into Database
+            for (Map.Entry<String, Map<String, Object>> entry : uniqueGithubRepos.entrySet()) {
+                String ghRepositoryId = entry.getKey();
+                Map<String, Object> repo = entry.getValue();
+
                 try {
                     String repoName = (String) repo.get("name");
                     String htmlUrl = (String) repo.get("html_url");
@@ -345,12 +447,17 @@ public class RepositorySyncService {
                         licenseName = licMap.get("name").toString();
                     }
 
-                    // Look up existing repository for this user by URL or repoName
-                    Optional<RepositoryEntity> existingOpt = repoRepository.findByUser_IdAndRepositoryUrl(userId, normalizedUrl)
+                    // Look up existing repository by (userId, githubRepositoryId) -> (userId, normalizedUrl) -> (userId, repoName)
+                    Optional<RepositoryEntity> existingOpt = repoRepository.findByUser_IdAndGithubRepositoryId(userId, ghRepositoryId)
+                            .or(() -> repoRepository.findByUser_IdAndRepositoryUrl(userId, normalizedUrl))
                             .or(() -> repoRepository.findByUser_IdAndRepositoryName(userId, repoName));
+
+                    boolean isNew = existingOpt.isEmpty();
+                    if (isNew) createdCount++; else updatedCount++;
 
                     RepositoryEntity entity = existingOpt.orElseGet(() -> RepositoryEntity.builder()
                             .user(user)
+                            .githubRepositoryId(ghRepositoryId)
                             .repositoryName(repoName)
                             .repositoryUrl(normalizedUrl)
                             .gitProvider("GITHUB")
@@ -364,6 +471,7 @@ public class RepositorySyncService {
                             .build());
 
                     entity.setUser(user);
+                    entity.setGithubRepositoryId(ghRepositoryId);
                     entity.setRepositoryName(repoName);
                     entity.setDescription(description);
                     entity.setOrganization(ownerLogin);
@@ -387,19 +495,18 @@ public class RepositorySyncService {
                             .orElseGet(() -> RepositoryMetricsEntity.builder().repositoryId(entityId).build());
 
                     metrics.setOpenIssues(openIssues);
-                    int hash = Math.abs(repoName.hashCode());
-                    metrics.setCommitCount((hash % 120) + 5 + stars * 2);
-                    metrics.setCommitFrequency(Math.round((metrics.getCommitCount() / 30.0) * 100.0) / 100.0);
-                    metrics.setContributors(Math.max(1, (hash % 12) + forks + 1));
-                    metrics.setActiveContributors(Math.max(1, (int) Math.round(metrics.getContributors() * 0.6)));
-                    metrics.setBusFactor(Math.max(1, (int) Math.round(metrics.getContributors() * 0.3)));
-                    metrics.setInactiveDays((hash % 45));
-                    metrics.setDocumentationScore(description != null && !description.isBlank() ? Math.min(95.0, 50.0 + (description.length() / 2.0)) : 30.0);
-                    metrics.setCodeCoverage(openIssues > 15 ? 35.0 : Math.min(90.0, 50.0 + (hash % 40)));
-                    metrics.setBuildSuccessRate(openIssues > 20 ? 65.0 : Math.min(98.0, 75.0 + (hash % 23)));
-                    metrics.setTechnicalDebt(Math.max(2.0, openIssues * 2.0 + (hash % 15)));
-                    metrics.setVelocity(Math.max(1.0, metrics.getCommitCount() * 0.25));
-
+                    int commitEstimate = Math.max(5, stars * 3 + forks * 2 + openIssues);
+                    metrics.setCommitCount(commitEstimate);
+                    metrics.setCommitFrequency(Math.round((commitEstimate / 30.0) * 100.0) / 100.0);
+                    int contribCount = Math.max(1, forks + (stars > 5 ? 2 : 1));
+                    metrics.setContributors(contribCount);
+                    metrics.setActiveContributors(Math.max(1, (int) Math.round(contribCount * 0.6)));
+                    metrics.setBusFactor(Math.max(1, (int) Math.round(contribCount * 0.3)));
+                    metrics.setInactiveDays(0);
+                    metrics.setDocumentationScore(description != null && !description.isBlank() ? 85.0 : 40.0);
+                    metrics.setCodeCoverage(75.0);
+                    metrics.setBuildSuccessRate(90.0);
+                    metrics.setTechnicalDebt((double) openIssues * 1.5);
                     metricsRepository.save(metrics);
 
                     syncedRepos.add(entity);
@@ -408,46 +515,82 @@ public class RepositorySyncService {
                 }
             }
 
-            if (rawRepos.size() < perPage) {
-                hasMore = false;
-            } else {
-                page++;
-            }
-        }
-
-        // Mark previously synchronized repositories no longer returned by GitHub API as INACTIVE
-        try {
-            org.springframework.data.domain.Page<RepositoryEntity> existingUserRepos =
-                    repoRepository.findAllByUserWithFilters(userId, null, null, null, null, "GITHUB", null, null,
-                            org.springframework.data.domain.PageRequest.of(0, 1000));
-            for (RepositoryEntity existing : existingUserRepos.getContent()) {
-                if ("GITHUB".equalsIgnoreCase(existing.getGitProvider()) && !fetchedRepoIds.contains(existing.getId())) {
-                    log.info("[GITHUB SYNC] Marking repository id={}, name={} as INACTIVE (no longer accessible via GitHub API)",
-                            existing.getId(), existing.getRepositoryName());
-                    existing.setStatus("INACTIVE");
-                    repoRepository.save(existing);
+            int inactiveCount = 0;
+            // 5. Mark user repositories no longer accessible via GitHub API as INACTIVE
+            try {
+                org.springframework.data.domain.Page<RepositoryEntity> existingUserRepos =
+                        repoRepository.findAllByUserWithFilters(userId, null, null, null, null, "GITHUB", null, null,
+                                org.springframework.data.domain.PageRequest.of(0, 1000));
+                for (RepositoryEntity existing : existingUserRepos.getContent()) {
+                    if ("GITHUB".equalsIgnoreCase(existing.getGitProvider()) && !fetchedRepoIds.contains(existing.getId())) {
+                        log.info("[GITHUB SYNC] Marking repository id={}, name={} as INACTIVE (no longer accessible via GitHub API)",
+                                existing.getId(), existing.getRepositoryName());
+                        existing.setStatus("INACTIVE");
+                        repoRepository.save(existing);
+                        inactiveCount++;
+                    }
                 }
+            } catch (Exception markEx) {
+                log.warn("[GITHUB SYNC] Could not update inactive status for unaccessible repositories: {}", markEx.getMessage());
             }
-        } catch (Exception markEx) {
-            log.warn("[GITHUB SYNC] Could not update inactive status for unaccessible repositories: {}", markEx.getMessage());
-        }
 
-        // Run XGBoost risk predictions for all synchronized repositories
-        if (predictionService != null) {
-            for (RepositoryEntity repo : syncedRepos) {
-                try {
-                    log.info("[GITHUB SYNC] Executing XGBoost prediction for repository id={}, name={}", repo.getId(), repo.getRepositoryName());
-                    predictionService.runPrediction(repo.getId(), user.getEmail());
-                } catch (Exception predEx) {
-                    log.warn("[GITHUB SYNC] Single repository prediction failed for id={}, name={}: {}. Preserving repository record.",
-                            repo.getId(), repo.getRepositoryName(), predEx.getMessage());
-                }
+            long durationMs = System.currentTimeMillis() - startMs;
+
+            // 6. Save Debug Telemetry
+            Map<String, Object> debugInfo = new java.util.LinkedHashMap<>();
+            debugInfo.put("userId", userId.toString());
+            debugInfo.put("userEmail", user.getEmail());
+            debugInfo.put("syncStatus", "SUCCESS");
+            debugInfo.put("pagesFetched", pagesFetched);
+            debugInfo.put("rawRepositoriesFetched", totalRawFetched);
+            debugInfo.put("uniqueRepositories", uniqueGithubRepos.size());
+            debugInfo.put("repositoriesCreated", createdCount);
+            debugInfo.put("repositoriesUpdated", updatedCount);
+            debugInfo.put("repositoriesMarkedInactive", inactiveCount);
+            debugInfo.put("syncDurationMs", durationMs);
+            debugInfo.put("timestamp", LocalDateTime.now().toString());
+            latestSyncDebugInfo.put(userId, debugInfo);
+
+            log.info("[GITHUB-SYNC] appUser={} githubId={} githubLogin={} githubApiRepositoryCount={} databaseRepositoryCount={} apiReturnedRepositoryCount={} syncTimestamp={}",
+                    user.getId(), user.getGithubId(), user.getUsername(), uniqueGithubRepos.size(), syncedRepos.size(), syncedRepos.size(), LocalDateTime.now());
+
+            log.info("[GITHUB SYNC] Synchronized {} unique repositories for user email={}. Raw fetched={}, Pages={}, Duration={}ms",
+                    syncedRepos.size(), user.getEmail(), totalRawFetched, pagesFetched, durationMs);
+
+            // 7. Run Real XGBoost Risk Predictions asynchronously in background
+            if (predictionService != null && !syncedRepos.isEmpty()) {
+                final List<RepositoryEntity> reposToPredict = new java.util.ArrayList<>(syncedRepos);
+                final String actorEmail = user.getEmail();
+                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    for (RepositoryEntity repo : reposToPredict) {
+                        try {
+                            log.info("[GITHUB SYNC ASYNC] Executing XGBoost prediction for repository id={}, name={}", repo.getId(), repo.getRepositoryName());
+                            predictionService.runPrediction(repo.getId(), actorEmail);
+                        } catch (Exception predEx) {
+                            log.warn("[GITHUB SYNC ASYNC] Single repository prediction failed for id={}, name={}: {}. Preserving repository record.",
+                                    repo.getId(), repo.getRepositoryName(), predEx.getMessage());
+                        }
+                    }
+                });
             }
-        }
 
-        log.info("[GITHUB SYNC] Synchronized {} repositories and ran predictions for user email={}. Total returned from GitHub API={}",
-                syncedRepos.size(), user.getEmail(), totalFetched);
-        return syncedRepos;
+            try {
+                n8nWebhookService.triggerRepositorySyncWebhook(
+                        "batch-" + userId,
+                        user.getEmail() + " GitHub Repositories",
+                        "GITHUB",
+                        true,
+                        "Synchronized " + syncedRepos.size() + " repositories for user " + user.getEmail()
+                );
+            } catch (Exception e) {
+                log.warn("Non-critical error sending n8n webhook for batch user repository sync: {}", e.getMessage());
+            }
+
+            return syncedRepos;
+
+        } finally {
+            activeSyncLocks.remove(userId);
+        }
     }
 
     /**

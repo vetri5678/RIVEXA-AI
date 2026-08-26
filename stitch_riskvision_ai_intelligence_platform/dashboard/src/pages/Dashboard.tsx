@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import SystemHealthWidget from '../components/dashboard/SystemHealth/SystemHealthWidget';
-import GraveyardIndexWidget from '../components/dashboard/GraveyardIndex/GraveyardIndexWidget';
+import RivexaRiskIndexWidget from '../components/dashboard/RivexaRiskIndex/RivexaRiskIndexWidget';
 import RiskDistributionWidget from '../components/dashboard/RiskDistribution/RiskDistributionWidget';
 import PredictionTimelineWidget from '../components/dashboard/PredictionTimeline/PredictionTimelineWidget';
 import RepositoryHealthWidget from '../components/dashboard/RepositoryHealth/RepositoryHealthWidget';
@@ -62,9 +62,8 @@ export const Dashboard: React.FC = () => {
   // ─── GitHub connection gate ────────────────────────────────────────────────
   // Check if GitHub is connected for the current logged-in user
   const { data: githubConnection, isLoading: githubLoading } = useGithubConnectionStatus();
-  const totalRepos = overview?.total_projects ?? githubConnection?.repositoryCount ?? 0;
-  const isGitHubConnected: boolean = githubConnection?.connected === true || totalRepos > 0;
-  const showGithubWarning: boolean = !githubLoading && !overviewLoading && !isGitHubConnected && overview?.github_required !== false;
+  const isGitHubConnected: boolean = githubConnection?.connected === true;
+  const showGithubWarning: boolean = !githubLoading && !overviewLoading && !isGitHubConnected;
 
   // Dynamic header badge values from API
   const activeModelTag = mlVersion?.modelVersion
@@ -351,7 +350,7 @@ export const Dashboard: React.FC = () => {
       {/* Main Grid: modular widgets layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
         <SystemHealthWidget />
-        <GraveyardIndexWidget />
+        <RivexaRiskIndexWidget />
         <RiskDistributionWidget />
       </div>
 

@@ -94,6 +94,38 @@ public class AIController {
         return repositoryAnalysisService.streamGenerateRecommendations(repoId);
     }
 
+    @PostMapping("/recommendations")
+    public ResponseEntity<Map<String, Object>> getCustomRecommendations(@RequestBody Map<String, Object> payload) {
+        long startTime = System.currentTimeMillis();
+        String repoName = payload != null && payload.get("repositoryName") != null ? payload.get("repositoryName").toString() : "Repository";
+        String riskLevel = payload != null && payload.get("riskLevel") != null ? payload.get("riskLevel").toString() : "UNKNOWN";
+        double riskScore = payload != null && payload.get("riskScore") instanceof Number n ? n.doubleValue() : 50.0;
+
+        log.info("[AIController] Generating AI recommendations for repo '{}' (riskLevel={}, riskScore={})", repoName, riskLevel, riskScore);
+        try {
+            String prompt = String.format("Provide 3 actionable risk mitigation recommendations for software repository '%s' with Risk Level '%s' and Risk Score %.1f/100.", repoName, riskLevel, riskScore);
+            String aiRecs = openRouterService.chat(ChatRequestDTO.builder().message(prompt).build());
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "repositoryName", repoName,
+                    "riskLevel", riskLevel,
+                    "recommendations", aiRecs,
+                    "durationMs", System.currentTimeMillis() - startTime
+            ));
+        } catch (Exception e) {
+            log.warn("[AIController] LLM recommendation call failed, returning rule-based fallback: {}", e.getMessage());
+            String fallbackRecs = String.format("1. Refactor high-complexity code modules in %s.\n2. Increase unit test coverage above 80%%.\n3. Address critical security & technical debt issues.", repoName);
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "repositoryName", repoName,
+                    "riskLevel", riskLevel,
+                    "recommendations", fallbackRecs,
+                    "fallback", true,
+                    "durationMs", System.currentTimeMillis() - startTime
+            ));
+        }
+    }
+
     // ─── Threat Explanation ──────────────────────────────────────────────────
     @GetMapping("/repository/{repoId}/threat")
     public ResponseEntity<String> getThreatExplanation(@PathVariable UUID repoId) {

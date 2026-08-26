@@ -1,63 +1,151 @@
 package ai.riskvision.graveyard.service;
 
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import jakarta.annotation.PostConstruct;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
+/**
+ * N8nWebhookService — Asynchronous, resilient webhook dispatcher for external
+ * automation engines (e.g. n8n).
+ * 
+ * Ensures external integration failures (timeouts, HTTP 500, network errors, missing URLs)
+ * never break core business logic (auth, predictions, repository analysis).
+ */
 @Service
 @Slf4j
 public class N8nWebhookService {
 
-    private final RestTemplate restTemplate;
+    @Setter
+    private RestTemplate restTemplate;
 
     @Value("${n8n.webhook.enabled:true}")
-    private boolean webhookEnabled;
+    @Setter
+    private boolean webhookEnabled = true;
 
-    public N8nWebhookService() {
-        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(1500);
-        factory.setReadTimeout(2000);
-        this.restTemplate = new RestTemplate(factory);
-    }
+    @Value("${n8n.webhook.connect-timeout-ms:2000}")
+    @Setter
+    private int connectTimeoutMs = 2000;
+
+    @Value("${n8n.webhook.read-timeout-ms:3000}")
+    @Setter
+    private int readTimeoutMs = 3000;
+
+    @Value("${n8n.webhook.max-retries:2}")
+    @Setter
+    private int maxRetries = 2;
 
     @Value("${n8n.webhook.registration:http://localhost:5678/webhook/registration-verification}")
+    @Setter
     private String registrationWebhookUrl;
 
     @Value("${n8n.webhook.login-success:http://localhost:5678/webhook/login-success}")
+    @Setter
     private String loginSuccessWebhookUrl;
 
     @Value("${n8n.webhook.login-failed:http://localhost:5678/webhook/login-failed-warning}")
+    @Setter
     private String loginFailedWebhookUrl;
 
     @Value("${n8n.webhook.password-reset:http://localhost:5678/webhook/password-reset}")
+    @Setter
     private String passwordResetWebhookUrl;
 
     @Value("${n8n.webhook.password-changed:http://localhost:5678/webhook/password-changed}")
+    @Setter
     private String passwordChangedWebhookUrl;
 
     @Value("${n8n.webhook.account-locked:http://localhost:5678/webhook/account-locked}")
+    @Setter
     private String accountLockedWebhookUrl;
 
     @Value("${n8n.webhook.oauth-linked:http://localhost:5678/webhook/oauth-linked}")
+    @Setter
     private String oauthLinkedWebhookUrl;
 
+    @Value("${n8n.webhook.prediction-completed:http://localhost:5678/webhook/prediction-completed}")
+    @Setter
+    private String predictionCompletedWebhookUrl;
+
+    @Value("${n8n.webhook.repository-sync:http://localhost:5678/webhook/repository-sync}")
+    @Setter
+    private String repositorySyncWebhookUrl;
+
+    @Value("${n8n.webhook.high-risk-detected:http://localhost:5678/webhook/high-risk-detected}")
+    @Setter
+    private String highRiskDetectedWebhookUrl;
+
+    @Value("${n8n.webhook.report-generated:http://localhost:5678/webhook/report-generated}")
+    @Setter
+    private String reportGeneratedWebhookUrl;
+
+    @Value("${n8n.webhook.risk-threshold:80.0}")
+    @Setter
+    private double riskAlertThreshold = 80.0;
+
     @Value("${n8n.webhook.secret:rv_n8n_secret_key_2026}")
+    @Setter
     private String webhookSecret;
 
-    private String computeSignature(String data) {
+    private final AtomicLong successCount = new AtomicLong(0);
+    private final AtomicLong failureCount = new AtomicLong(0);
+    private volatile LocalDateTime lastSuccessfulWebhook;
+    private volatile LocalDateTime lastFailedWebhook;
+    private volatile String lastError;
+
+    public N8nWebhookService() {
+        // Default constructor for Spring
+    }
+
+    public N8nWebhookService(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
+    @PostConstruct
+    public void init() {
+        if (this.restTemplate == null) {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(connectTimeoutMs);
+            factory.setReadTimeout(readTimeoutMs);
+            this.restTemplate = new RestTemplate(factory);
+        }
+    }
+
+    private RestTemplate getOrCreateRestTemplate() {
+        if (this.restTemplate == null) {
+            init();
+        }
+        return this.restTemplate;
+    }
+
+    private String computeSignature(String timestamp, String requestId, String data) {
         try {
             String secret = (webhookSecret != null && !webhookSecret.isEmpty()) ? webhookSecret : "rv_n8n_secret_key_2026";
-            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
-            javax.crypto.spec.SecretKeySpec secretKey = new javax.crypto.spec.SecretKeySpec(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+            String rawData = timestamp + "." + requestId + "." + data;
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec secretKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
             mac.init(secretKey);
-            byte[] rawHmac = mac.doFinal(data.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            byte[] rawHmac = mac.doFinal(rawData.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
             for (byte b : rawHmac) {
                 sb.append(String.format("%02x", b));
@@ -68,28 +156,85 @@ public class N8nWebhookService {
         }
     }
 
-    private void sendWebhook(String url, Map<String, Object> payload, String eventName) {
+    private String computeSignature(String data) {
+        return computeSignature(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME), "legacy-req", data);
+    }
+
+    /**
+     * Dispatch webhook with timeout, retries, security headers, and non-blocking failure safety.
+     */
+    public boolean sendWebhook(String url, Map<String, Object> payload, String eventName) {
         if (!webhookEnabled) {
-            log.debug("n8n Webhooks are disabled. Skipping event {}.", eventName);
-            return;
+            log.info("[WEBHOOK_DISABLED] Webhooks are disabled. Skipping event [{}]", eventName);
+            return false;
         }
         if (url == null || url.trim().isEmpty()) {
-            log.warn("n8n Webhook URL for event {} is not configured. Skipping webhook trigger.", eventName);
-            return;
+            log.warn("[WEBHOOK_UNCONFIGURED] Webhook URL for event [{}] is missing/blank. Skipping dispatch.", eventName);
+            return false;
         }
-        try {
-            log.info("Dispatching n8n webhook event [{}] to URL: {}", eventName, url);
-            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-            headers.set("X-Event-Type", eventName);
-            headers.set("X-Signature", computeSignature(payload.toString()));
 
-            org.springframework.http.HttpEntity<Map<String, Object>> requestEntity = new org.springframework.http.HttpEntity<>(payload, headers);
-            restTemplate.postForEntity(url, requestEntity, String.class);
-            log.info("Successfully dispatched n8n webhook event [{}]", eventName);
+        try {
+            URI uri = new URI(url);
+            if (uri.getScheme() == null || (!uri.getScheme().equalsIgnoreCase("http") && !uri.getScheme().equalsIgnoreCase("https"))) {
+                log.warn("[WEBHOOK_INVALID_URL] Invalid URI scheme for event [{}] URL: {}", eventName, url);
+                return false;
+            }
         } catch (Exception e) {
-            log.error("Failed to dispatch n8n webhook event [{}]: {}", eventName, e.getMessage());
+            log.warn("[WEBHOOK_INVALID_URL] Malformed URL for event [{}]: {} ({})", eventName, url, e.getMessage());
+            return false;
         }
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
+        String requestId = UUID.randomUUID().toString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Event-Type", eventName);
+        headers.set("X-RIVEXA-Event", eventName);
+        headers.set("X-RIVEXA-Timestamp", timestamp);
+        headers.set("X-RIVEXA-Request-ID", requestId);
+        headers.set("X-RIVEXA-Signature", computeSignature(timestamp, requestId, payload.toString()));
+        headers.set("X-Signature", computeSignature(payload.toString()));
+
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
+        RestTemplate client = getOrCreateRestTemplate();
+
+        int attempts = Math.max(1, maxRetries + 1);
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                log.info("[WEBHOOK_DISPATCH_ATTEMPT] Event [{}] attempt {}/{} sending to: {}", eventName, attempt, attempts, url);
+                ResponseEntity<String> response = client.postForEntity(url, requestEntity, String.class);
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    log.info("[WEBHOOK_DISPATCH_SUCCESS] Webhook [{}] delivered successfully to {} (Status: HTTP {})",
+                            eventName, url, response.getStatusCode().value());
+                    successCount.incrementAndGet();
+                    lastSuccessfulWebhook = LocalDateTime.now();
+                    return true;
+                } else {
+                    log.warn("[WEBHOOK_DISPATCH_WARNING] Webhook [{}] returned non-2xx status code: HTTP {} (Attempt {}/{})",
+                            eventName, response.getStatusCode().value(), attempt, attempts);
+                }
+            } catch (Exception e) {
+                log.warn("[WEBHOOK_DISPATCH_WARNING] Event [{}] attempt {}/{} failed: {}",
+                        eventName, attempt, attempts, e.getMessage());
+                lastError = e.getMessage();
+            }
+
+            if (attempt < attempts) {
+                try {
+                    Thread.sleep(150L * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
+        failureCount.incrementAndGet();
+        lastFailedWebhook = LocalDateTime.now();
+        log.error("[WEBHOOK_DISPATCH_FAILED] Webhook [{}] failed after {} attempts. Core operation continues safely.",
+                eventName, attempts);
+        return false;
     }
 
     @Async
@@ -122,7 +267,6 @@ public class N8nWebhookService {
         payload.put("ipAddress", ipAddress != null ? ipAddress : "unknown");
         payload.put("userAgent", userAgent != null ? userAgent : "unknown");
 
-        // Parse Browser and OS for explicit telemetry fields
         String ua = userAgent != null ? userAgent : "";
         String os = "Unknown OS";
         if (ua.contains("Windows")) os = "Windows";
@@ -205,9 +349,85 @@ public class N8nWebhookService {
         sendWebhook(oauthLinkedWebhookUrl, payload, "OAUTH_ACCOUNT_LINKED");
     }
 
-    // Retained for backward compatibility
+    @Async
+    public void triggerPredictionCompletedWebhook(String predictionId, String repositoryId, String riskLevel, double failureProbability, double confidence, String triggeredBy) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("eventType", "PREDICTION_COMPLETED");
+        payload.put("predictionId", predictionId);
+        payload.put("repositoryId", repositoryId);
+        payload.put("riskLevel", riskLevel);
+        payload.put("failureProbability", failureProbability);
+        payload.put("confidence", confidence);
+        payload.put("triggeredBy", triggeredBy != null ? triggeredBy : "SYSTEM");
+        payload.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+        sendWebhook(predictionCompletedWebhookUrl, payload, "PREDICTION_COMPLETED");
+    }
+
+    @Async
+    public void triggerRepositorySyncWebhook(String repositoryId, String repositoryName, String gitProvider, boolean isSuccess, String message) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("eventType", "REPOSITORY_SYNC_COMPLETED");
+        payload.put("repositoryId", repositoryId);
+        payload.put("repositoryName", repositoryName != null ? repositoryName : "");
+        payload.put("gitProvider", gitProvider != null ? gitProvider : "GITHUB");
+        payload.put("status", isSuccess ? "SUCCESS" : "FAILED");
+        payload.put("message", message != null ? message : "");
+        payload.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+        sendWebhook(repositorySyncWebhookUrl, payload, "REPOSITORY_SYNC_COMPLETED");
+    }
+
+    @Async
+    public void triggerHighRiskDetectedWebhook(String predictionId, String repositoryId, String repositoryName, String riskLevel, double riskScore, double failureProbability, String actor) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("eventType", "HIGH_RISK_DETECTED");
+        payload.put("predictionId", predictionId);
+        payload.put("repositoryId", repositoryId);
+        payload.put("repositoryName", repositoryName != null ? repositoryName : "");
+        payload.put("riskLevel", riskLevel);
+        payload.put("riskScore", riskScore);
+        payload.put("failureProbability", failureProbability);
+        payload.put("threshold", riskAlertThreshold);
+        payload.put("triggeredBy", actor != null ? actor : "SYSTEM");
+        payload.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+        sendWebhook(highRiskDetectedWebhookUrl, payload, "HIGH_RISK_DETECTED");
+    }
+
+    @Async
+    public void triggerReportGeneratedWebhook(String reportId, String repositoryId, String reportType, String format, String generatedBy) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("eventType", "REPORT_GENERATED");
+        payload.put("reportId", reportId);
+        payload.put("repositoryId", repositoryId);
+        payload.put("reportType", reportType != null ? reportType : "EXECUTIVE");
+        payload.put("format", format != null ? format : "PDF");
+        payload.put("generatedBy", generatedBy != null ? generatedBy : "SYSTEM");
+        payload.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+        sendWebhook(reportGeneratedWebhookUrl, payload, "REPORT_GENERATED");
+    }
+
     @Async
     public void triggerLoginWebhook(String userId, String name, String email, String provider, String avatar, boolean isNewUser, String ipAddress, String userAgent) {
         triggerLoginSuccessWebhook(userId, name, email, provider, avatar, isNewUser, ipAddress, userAgent);
     }
+
+    public Map<String, Object> getIntegrationStatus() {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("enabled", webhookEnabled);
+        String baseUrl = "http://localhost:5678/webhook";
+        if (repositorySyncWebhookUrl != null && repositorySyncWebhookUrl.contains("/webhook")) {
+            baseUrl = repositorySyncWebhookUrl.substring(0, repositorySyncWebhookUrl.indexOf("/webhook") + 8);
+        }
+        status.put("baseUrl", baseUrl);
+        status.put("connectTimeoutMs", connectTimeoutMs);
+        status.put("readTimeoutMs", readTimeoutMs);
+        status.put("maxRetries", maxRetries);
+        status.put("riskAlertThreshold", riskAlertThreshold);
+        status.put("successCount", successCount.get());
+        status.put("failureCount", failureCount.get());
+        status.put("lastSuccessfulWebhook", lastSuccessfulWebhook != null ? lastSuccessfulWebhook.format(DateTimeFormatter.ISO_DATE_TIME) : null);
+        status.put("lastFailedWebhook", lastFailedWebhook != null ? lastFailedWebhook.format(DateTimeFormatter.ISO_DATE_TIME) : null);
+        status.put("lastError", lastError);
+        return status;
+    }
 }
+

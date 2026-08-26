@@ -231,10 +231,8 @@ public class RepositoryService {
         UUID entityId = Objects.requireNonNull(entity.getId(), "Generated repository ID must not be null");
         entity = repoRepository.findById(entityId).orElse(entity); // re-fetch so @CreationTimestamp fields are hydrated
 
-        // Bootstrap empty metrics record
-        RepositoryMetricsEntity metrics = RepositoryMetricsEntity.builder()
-                .repositoryId(entityId)
-                .build();
+        RepositoryMetricsEntity metrics = metricsRepository.findByRepositoryId(entityId)
+                .orElseGet(() -> RepositoryMetricsEntity.builder().repositoryId(entityId).build());
         metricsRepository.save(metrics);
 
         syncService.logActivity(entityId, "REPOSITORY_CREATED",
@@ -292,9 +290,8 @@ public class RepositoryService {
         UUID entityId = Objects.requireNonNull(entity.getId(), "Generated repository ID must not be null");
         entity = repoRepository.findById(entityId).orElse(entity);
 
-        RepositoryMetricsEntity metrics = RepositoryMetricsEntity.builder()
-                .repositoryId(entityId)
-                .build();
+        RepositoryMetricsEntity metrics = metricsRepository.findByRepositoryId(entityId)
+                .orElseGet(() -> RepositoryMetricsEntity.builder().repositoryId(entityId).build());
         metricsRepository.save(metrics);
 
         syncService.logActivity(entityId, "REPOSITORY_CREATED",
@@ -568,8 +565,10 @@ public class RepositoryService {
             UUID entityId = Objects.requireNonNull(entity.getId(), "Generated repository ID must not be null");
             entity = repoRepository.findById(entityId).orElse(entity);
 
-            // Bootstrap empty metrics record
-            metricsRepository.save(RepositoryMetricsEntity.builder().repositoryId(entityId).build());
+            // Bootstrap empty metrics record safely
+            RepositoryMetricsEntity metrics = metricsRepository.findByRepositoryId(entityId)
+                    .orElseGet(() -> RepositoryMetricsEntity.builder().repositoryId(entityId).build());
+            metricsRepository.save(metrics);
 
             // Trigger sync to populate metrics from GitHub API
             try {
@@ -609,17 +608,38 @@ public class RepositoryService {
     }
 
     private RepositorySummaryResponse toSummaryResponse(RepositoryEntity e) {
+        RepositoryMetricsEntity metrics = metricsRepository.findByRepositoryId(e.getId()).orElse(null);
+        Integer commitCount = metrics != null ? metrics.getCommitCount() : null;
+        Integer pullRequests = metrics != null ? metrics.getPullRequests() : null;
+        Double buildSuccessRate = metrics != null ? metrics.getBuildSuccessRate() : null;
+
+        String repoName = e.getRepositoryName();
+        if (repoName == null || repoName.isBlank() || "(Unnamed)".equalsIgnoreCase(repoName) || "Unnamed Repository".equalsIgnoreCase(repoName)) {
+            if (e.getRepositoryUrl() != null && !e.getRepositoryUrl().isBlank()) {
+                String cleanUrl = e.getRepositoryUrl().trim().replaceAll("/+$", "").replaceAll("\\.git$", "");
+                String[] parts = cleanUrl.split("/");
+                if (parts.length >= 1 && !parts[parts.length - 1].isBlank()) {
+                    repoName = parts[parts.length - 1];
+                }
+            }
+        }
+        if (repoName == null || repoName.isBlank()) {
+            repoName = e.getId() != null ? "Repository-" + e.getId().toString().substring(0, 8) : "Repository";
+        }
+
         return RepositorySummaryResponse.builder()
                 .id(e.getId())
-                // repositoryName is @Column(nullable=false) in the entity but guard defensively here
-                // in case of legacy data or direct DB manipulation.
-                .repositoryName(e.getRepositoryName() != null ? e.getRepositoryName() : "(Unnamed)")
+                .repositoryName(repoName)
                 .organization(e.getOrganization())
                 .description(e.getDescription()).technology(e.getTechnology()).language(e.getLanguage())
                 .repositoryUrl(e.getRepositoryUrl()).gitProvider(e.getGitProvider()).branch(e.getBranch())
                 .status(e.getStatus()).healthScore(e.getHealthScore()).failureProbability(e.getFailureProbability())
                 .predictionStatus(e.getPredictionStatus()).contributors(e.getContributors())
-                .openIssues(e.getOpenIssues()).lastCommitDate(e.getLastCommitDate())
+                .openIssues(e.getOpenIssues())
+                .commitCount(commitCount)
+                .pullRequests(pullRequests)
+                .buildSuccessRate(buildSuccessRate)
+                .lastCommitDate(e.getLastCommitDate())
                 .lastSyncDate(e.getLastSyncDate()).lifecycleStage(e.getLifecycleStage())
                 .aiConfidence(e.getAiConfidence()).riskLevel(e.getRiskLevel()).createdAt(e.getCreatedAt()).build();
     }

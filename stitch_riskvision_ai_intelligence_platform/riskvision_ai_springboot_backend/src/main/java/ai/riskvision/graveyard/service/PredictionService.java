@@ -27,6 +27,7 @@ public class PredictionService {
     private final PredictionClient predictionClient;
     private final PredictionHistoryRepository historyRepository;
     private final ObjectMapper objectMapper;
+    private final N8nWebhookService n8nWebhookService;
 
     // Report counter automatically incremented on prediction reports
     private final AtomicLong reportCounter = new AtomicLong(12L);
@@ -45,6 +46,34 @@ public class PredictionService {
             reportCounter.incrementAndGet();
             log.info("[PredictionService] Prediction complete: id={} riskLevel={} confidence={} reportCount={}",
                     response.getId(), response.getRiskLevel(), response.getConfidence(), reportCounter.get());
+
+            // Trigger non-blocking external n8n webhook notification
+            try {
+                n8nWebhookService.triggerPredictionCompletedWebhook(
+                        response.getId(),
+                        projectId,
+                        response.getRiskLevel(),
+                        response.getProbability() != null ? response.getProbability() : 0.0,
+                        response.getConfidence() != null ? response.getConfidence() : 0.0,
+                        createdBy
+                );
+
+                double score = response.getRiskScore() != null ? response.getRiskScore() : (response.getProbability() != null ? response.getProbability() * 100.0 : 0.0);
+                String riskLevel = response.getRiskLevel() != null ? response.getRiskLevel().toUpperCase() : "UNKNOWN";
+                if ("HIGH".equals(riskLevel) || "CRITICAL".equals(riskLevel) || score >= 80.0) {
+                    n8nWebhookService.triggerHighRiskDetectedWebhook(
+                            response.getId(),
+                            projectId,
+                            projectId,
+                            riskLevel,
+                            score,
+                            response.getProbability() != null ? response.getProbability() : 0.0,
+                            createdBy
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("[PredictionService] Non-critical error triggering prediction/high-risk webhooks: {}", e.getMessage());
+            }
         }
 
         return response;

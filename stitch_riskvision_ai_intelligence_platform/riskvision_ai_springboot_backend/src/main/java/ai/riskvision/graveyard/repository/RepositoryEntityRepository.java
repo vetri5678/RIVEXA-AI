@@ -21,7 +21,25 @@ public interface RepositoryEntityRepository extends JpaRepository<RepositoryEnti
 
     boolean existsByRepositoryNameAndOrganization(String repositoryName, String organization);
 
-    Optional<RepositoryEntity> findByRepositoryUrl(String repositoryUrl);
+    Optional<RepositoryEntity> findFirstByRepositoryUrl(String repositoryUrl);
+    default Optional<RepositoryEntity> findByRepositoryUrl(String repositoryUrl) {
+        return findFirstByRepositoryUrl(repositoryUrl);
+    }
+
+    Optional<RepositoryEntity> findFirstByUser_IdAndGithubRepositoryId(UUID userId, String githubRepositoryId);
+    default Optional<RepositoryEntity> findByUser_IdAndGithubRepositoryId(UUID userId, String githubRepositoryId) {
+        return findFirstByUser_IdAndGithubRepositoryId(userId, githubRepositoryId);
+    }
+
+    Optional<RepositoryEntity> findFirstByUser_IdAndRepositoryUrl(UUID userId, String repositoryUrl);
+    default Optional<RepositoryEntity> findByUser_IdAndRepositoryUrl(UUID userId, String repositoryUrl) {
+        return findFirstByUser_IdAndRepositoryUrl(userId, repositoryUrl);
+    }
+
+    Optional<RepositoryEntity> findFirstByUser_IdAndRepositoryName(UUID userId, String repositoryName);
+    default Optional<RepositoryEntity> findByUser_IdAndRepositoryName(UUID userId, String repositoryName) {
+        return findFirstByUser_IdAndRepositoryName(userId, repositoryName);
+    }
 
     Page<RepositoryEntity> findByStatusNot(String status, Pageable pageable);
 
@@ -178,14 +196,34 @@ public interface RepositoryEntityRepository extends JpaRepository<RepositoryEnti
     @Query("SELECT r FROM RepositoryEntity r WHERE r.user.id = :userId AND UPPER(r.status) = 'ACTIVE' ORDER BY r.failureProbability DESC")
     List<RepositoryEntity> findTop5ByUserIdAndStatusActive(@Param("userId") UUID userId, Pageable pageable);
 
-    Optional<RepositoryEntity> findByUser_IdAndRepositoryUrl(UUID userId, String repositoryUrl);
-
-    Optional<RepositoryEntity> findByUser_IdAndRepositoryName(UUID userId, String repositoryName);
 
     @org.springframework.data.jpa.repository.Modifying
     @Query("DELETE FROM RepositoryEntity r WHERE r.user.id = :userId AND LOWER(r.gitProvider) = LOWER(:gitProvider)")
     void deleteByUserIdAndGitProvider(@Param("userId") UUID userId, @Param("gitProvider") String gitProvider);
 
+    @Query("SELECT r FROM RepositoryEntity r WHERE r.user.id = :userId AND LOWER(r.gitProvider) = LOWER(:gitProvider)")
+    List<RepositoryEntity> findByUserIdAndGitProvider(@Param("userId") UUID userId, @Param("gitProvider") String gitProvider);
+
     @Query("SELECT COUNT(r) FROM RepositoryEntity r WHERE r.user.id = :userId AND LOWER(r.gitProvider) = LOWER(:gitProvider)")
     long countByUserIdAndGitProvider(@Param("userId") UUID userId, @Param("gitProvider") String gitProvider);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+        UPDATE RepositoryEntity r
+        SET r.failureProbability = :failureProbability,
+            r.healthScore = :healthScore,
+            r.riskLevel = :riskLevel,
+            r.aiConfidence = :aiConfidence,
+            r.predictionStatus = :predictionStatus,
+            r.updatedAt = CURRENT_TIMESTAMP
+        WHERE r.id = :id
+        """)
+    int updatePredictionResults(
+            @Param("id") UUID id,
+            @Param("failureProbability") Double failureProbability,
+            @Param("healthScore") Double healthScore,
+            @Param("riskLevel") String riskLevel,
+            @Param("aiConfidence") Double aiConfidence,
+            @Param("predictionStatus") String predictionStatus
+    );
 }

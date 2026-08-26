@@ -2,9 +2,28 @@
 ALTER TABLE repositories ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_repositories_user_id ON repositories(user_id);
 
+-- Ensure github_repository_id column exists on repositories table
+ALTER TABLE repositories ADD COLUMN IF NOT EXISTS github_repository_id VARCHAR(100);
+CREATE INDEX IF NOT EXISTS idx_repositories_github_repo_id ON repositories(github_repository_id);
+
 -- Ensure github_id column exists on users table for GitHub OAuth Multi-Account support
 ALTER TABLE users ADD COLUMN IF NOT EXISTS github_id BIGINT UNIQUE;
 CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id);
+
+-- Ensure users table columns exist for auth, OAuth & preferences
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'email';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_user_id VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INT DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP WITH TIME ZONE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'UTC';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(20) DEFAULT 'en';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_settings TEXT;
 
 -- ─── Code Vision AI Tables ───────────────────────────────────────────────────
 

@@ -164,21 +164,27 @@ export const Repositories: React.FC = () => {
 
   const handleExport = async () => {
     try {
-      const res = await exportMutation.mutateAsync({ status: filters.status, riskLevel: filters.riskLevel });
-      const csvContent = "data:text/csv;charset=utf-8," 
-        + ["Repository Name,Organization,Git Provider,Branch,Status,Health Score,Failure Probability,Risk Level,Created Date"]
-        .concat(res.content.map(r => 
-          `"${r.repositoryName}","${r.organization || ''}","${r.gitProvider}","${r.branch}","${r.status}",${r.healthScore},${r.failureProbability},"${r.riskLevel}","${r.createdAt}"`
-        )).join("\n");
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `RIVEXA_repositories_export_${new Date().toISOString().slice(0,10)}.csv`);
+      if (listData?.totalElements === 0) {
+        alert('No repositories available to export.');
+        return;
+      }
+      const blob = await exportMutation.mutateAsync(filters);
+      if (!blob || blob.size === 0) {
+        alert('No repositories available to export.');
+        return;
+      }
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `rivexa-repositories-${dateStr}.csv`;
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch {
-      alert('Export failed.');
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e: any) {
+      alert(`CSV export failed: ${e.message || 'Export failed.'}`);
     }
   };
 
@@ -228,7 +234,7 @@ export const Repositories: React.FC = () => {
       </div>
 
       {/* Summary Cards */}
-      <RepositorySummaryCards stats={statsData} isLoading={statsLoading} />
+      <RepositorySummaryCards stats={statsData} repositories={listData?.content ?? []} isLoading={statsLoading} />
 
       {/* Analytics Charts */}
       <div className="mb-6">
