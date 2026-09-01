@@ -1,4 +1,4 @@
-﻿"""
+"""
 Application configuration with environment-based settings.
 
 Supports development (SQLite) and production (PostgreSQL) deployments.
@@ -7,7 +7,7 @@ Supports development (SQLite) and production (PostgreSQL) deployments.
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -107,6 +107,16 @@ class Settings(BaseSettings):
     backend_url: str = Field(default="http://localhost:8080/api/v1", alias="BACKEND_URL")
     llm_url: str = Field(default="http://localhost:5001/api/v1", alias="LLM_URL")
 
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def validate_and_normalize_database_url(cls, v: Any) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+            # Normalize postgres:// to postgresql:// for Render / Supabase compatibility
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql://", 1)
+        return str(v)
 
     @field_validator("cors_origins", mode="before")
     @classmethod

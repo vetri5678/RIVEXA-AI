@@ -17,12 +17,24 @@ class Base(DeclarativeBase):
     """Declarative base for all ORM models."""
 
 
+import logging
+
+logger = logging.getLogger("riskvision.database")
+
+
 def _create_engine():
+    if settings.is_production and settings.is_sqlite:
+        logger.error("CRITICAL: Production environment requires a PostgreSQL DATABASE_URL. SQLite is disallowed in production.")
+        raise RuntimeError(
+            "Production environment (ENVIRONMENT=production) requires a PostgreSQL DATABASE_URL. "
+            "SQLite fallback is strictly prohibited in production."
+        )
+
     connect_args: dict[str, Any] = {}
     if settings.is_sqlite:
         connect_args = {"check_same_thread": False}
     else:
-        connect_args = {"connect_timeout": 10}
+        connect_args = {"connect_timeout": 15}
 
     engine_kwargs: dict[str, Any] = {
         "echo": settings.db_echo,
@@ -34,6 +46,8 @@ def _create_engine():
         engine_kwargs["pool_size"] = settings.db_pool_size
         engine_kwargs["max_overflow"] = settings.db_max_overflow
 
+    db_type = "SQLite" if settings.is_sqlite else "PostgreSQL"
+    logger.info("Initializing SQLAlchemy database engine (dialect=%s, pool_pre_ping=True)", db_type)
     return create_engine(settings.database_url, **engine_kwargs)
 
 
