@@ -114,6 +114,8 @@ synthetic_data.csv
 !models/xgboost_model.joblib
 !models/encoders.joblib
 !riskvision_ai_backend/models/*.joblib
+!transformers/*.joblib
+!riskvision_ai_backend/transformers/*.joblib
 models/trained/
 models/checkpoints/
 

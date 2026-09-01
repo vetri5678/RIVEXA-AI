@@ -37,6 +37,7 @@ ENV/
 **/*.joblib
 !**/*.joblib
 !**/models/*.joblib
+!**/transformers/*.joblib
 
 # ── Secrets & Environment ────────────────────────────────────
 .env
