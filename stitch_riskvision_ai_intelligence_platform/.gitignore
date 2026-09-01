@@ -111,6 +111,9 @@ synthetic_data.csv
 *.pth
 *.onnx
 *.joblib
+!models/xgboost_model.joblib
+!models/encoders.joblib
+!riskvision_ai_backend/models/*.joblib
 models/trained/
 models/checkpoints/
 

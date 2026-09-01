@@ -35,6 +35,8 @@ ENV/
 **/*.pkl
 **/*.pickle
 **/*.joblib
+!**/*.joblib
+!**/models/*.joblib
 
 # ── Secrets & Environment ────────────────────────────────────
 .env
