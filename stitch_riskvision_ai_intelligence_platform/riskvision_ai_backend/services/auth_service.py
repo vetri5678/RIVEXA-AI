@@ -272,17 +272,32 @@ class AuthService:
 
     @staticmethod
     def bootstrap_admin(db: Session) -> None:
-        """Create default super admin if no users exist."""
-        if db.query(User).count() > 0:
+        """Create default super admin if no admin user exists (idempotent & thread-safe)."""
+        logger = logging.getLogger("riskvision.auth")
+        email_normalized = settings.bootstrap_admin_email.strip().lower()
+
+        # Check if admin with email or username already exists
+        existing_admin = db.query(User).filter(
+            (User.email == email_normalized) | (User.username == "admin")
+        ).first()
+
+        if existing_admin:
+            logger.info("[Bootstrap] Admin user already exists (id=%s, email=%s). Skipping bootstrap.", existing_admin.id, existing_admin.email)
             return
-        admin = User(
-            email=settings.bootstrap_admin_email,
-            username="admin",
-            hashed_password=hash_password(settings.bootstrap_admin_password),
-            full_name="System Administrator",
-            role=UserRole.SUPER_ADMIN.value,
-            is_active=True,
-            is_verified=True,
-        )
-        db.add(admin)
-        db.commit()
+
+        try:
+            admin = User(
+                email=email_normalized,
+                username="admin",
+                hashed_password=hash_password(settings.bootstrap_admin_password),
+                full_name="System Administrator",
+                role=UserRole.SUPER_ADMIN.value,
+                is_active=True,
+                is_verified=True,
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("[Bootstrap] Default super admin created successfully (email=%s).", email_normalized)
+        except Exception as exc:
+            db.rollback()
+            logger.warning("[Bootstrap] Bypassed admin bootstrap (already created or constraint collision): %s", exc)
