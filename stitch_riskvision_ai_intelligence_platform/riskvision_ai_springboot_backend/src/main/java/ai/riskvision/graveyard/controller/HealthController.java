@@ -52,8 +52,11 @@ public class HealthController {
         long duration = System.currentTimeMillis() - startTime;
         log.info("HTTP GET /api/v1/health completed in {} ms -> DB:{}", duration, dbStatus);
 
-        // Always return HTTP 200 for service health, even if DB is down
-        // This allows the service to be considered "up" for load balancer purposes
-        return ResponseEntity.ok(response);
+        // Return HTTP 200 when database is healthy, or 503 SERVICE_UNAVAILABLE when database is down
+        if (dbHealthy) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE).body(response);
+        }
     }
 }
